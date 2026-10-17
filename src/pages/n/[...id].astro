@@ -10,15 +10,15 @@ interface Props {
   node: ContentNode;
 }
 
-const data = siteDataJson as SiteData;
-
 export function getStaticPaths() {
+  const data = siteDataJson as SiteData;
   return data.nodes.map((node) => ({
     params: { id: node.id },
     props: { node },
   }));
 }
 
+const data = siteDataJson as SiteData;
 const { node } = Astro.props;
 const pageTitle = node.title ?? node.displayTitle;
 const description = node.description ?? node.excerpt;
