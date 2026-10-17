@@ -3,12 +3,15 @@ import siteDataJson from '../generated/site-data.json';
 import type { SiteData } from '../generated/contract';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import NodeStream from '../components/NodeStream.astro';
+import Revisions from '../components/Revisions.astro';
 import TagFilter from '../components/TagFilter.astro';
 
 const data = siteDataJson as SiteData;
-const counts = new Map<string, number>();
+const home = data.nodes.find((node) => node.id === data.homeNodeId);
+const archiveNodes = data.nodes.filter((node) => node.id !== data.homeNodeId);
 
-for (const node of data.nodes) {
+const counts = new Map<string, number>();
+for (const node of archiveNodes) {
   for (const tag of [node.primaryTag, ...node.secondaryTags]) {
     counts.set(tag, (counts.get(tag) ?? 0) + 1);
   }
@@ -19,17 +22,34 @@ const tags = [...counts.entries()]
   .map(([name, count]) => ({ name, count }));
 ---
 
-<BaseLayout site={data.site} canonicalPath="/">
-  <p class="intro">按时间混排的节点流。标签不是栏目，只是筛选器。</p>
-
+<BaseLayout
+  site={data.site}
+  title={home?.title}
+  description={home?.description ?? home?.excerpt}
+  canonicalPath="/"
+>
   {
-    data.nodes.length > 0 ? (
-      <>
-        <TagFilter tags={tags} total={data.nodes.length} />
-        <NodeStream nodes={data.nodes} site={data.site} />
-      </>
+    home ? (
+      <article class="node-detail">
+        {home.title && <h1 class="page-title">{home.title}</h1>}
+        <div class="prose" set:html={home.html} />
+        <p class="back">
+          <a href="/archive">查看全部内容 →</a>
+        </p>
+        <Revisions node={home} site={data.site} />
+      </article>
     ) : (
-      <p class="intro">还没有内容。</p>
+      <>
+        <p class="intro">按时间混排的节点流。标签不是栏目，只是筛选器。</p>
+        {archiveNodes.length > 0 ? (
+          <>
+            <TagFilter tags={tags} total={archiveNodes.length} />
+            <NodeStream nodes={archiveNodes} site={data.site} />
+          </>
+        ) : (
+          <p class="intro">还没有内容。</p>
+        )}
+      </>
     )
   }
 </BaseLayout>

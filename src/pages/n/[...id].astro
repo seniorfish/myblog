@@ -12,10 +12,12 @@ interface Props {
 
 export function getStaticPaths() {
   const data = siteDataJson as SiteData;
-  return data.nodes.map((node) => ({
-    params: { id: node.id },
-    props: { node },
-  }));
+  return data.nodes
+    .filter((node) => node.id !== data.homeNodeId)
+    .map((node) => ({
+      params: { id: node.id },
+      props: { node },
+    }));
 }
 
 const data = siteDataJson as SiteData;

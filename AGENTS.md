@@ -28,8 +28,9 @@
 
 ## 路由
 
-- `/` 首页时间流
-- `/n/{id}` 节点详情
+- `/` 首页：渲染 `SiteData.homeNodeId` 对应节点的 HTML（自我介绍）；没有首页节点时回退时间流。
+- `/archive` 文章索引：过滤掉首页节点后按时间混排。
+- `/n/{id}` 节点详情：`getStaticPaths` 必须过滤掉 `homeNodeId`。
 - `/404`
 
 ## 命令
