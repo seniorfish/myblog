@@ -364,7 +364,8 @@ button {
   color: var(--text);
 }
 
-.node-detail h1 {
+.node-detail h1,
+.page-title {
   margin: 0 0 0.6rem;
   font-size: clamp(1.55rem, 4vw, 2rem);
   line-height: 1.3;
