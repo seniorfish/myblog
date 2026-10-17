@@ -39,6 +39,8 @@ export interface CompileOptions {
   outDir?: string;
   /** CI should set this to true to reject uncommitted content. */
   requireCleanWorktree?: boolean;
+  /** Test/embedding override; defaults to loading <root>/site.config.ts. */
+  config?: SiteConfig;
 }
 
 export interface CompileResult {
@@ -112,7 +114,7 @@ function renderRss(site: SiteMeta, nodes: ContentNode[]): string {
         `      <link>${escapeXml(link)}</link>`,
         `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
         `      <pubDate>${pubDate}</pubDate>`,
-        `      <description>${escapeXml(node.excerpt)}</description>`,
+        `      <description>${escapeXml(node.excerpt || node.externalUrl || '')}</description>`,
         `      <content:encoded>${cdata(content)}</content:encoded>`,
         '    </item>',
       ].join('\n');
@@ -268,19 +270,23 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
   const issues: CompileIssue[] = [];
 
   let config: SiteConfig;
-  try {
-    config = loadSiteConfig();
-  } catch (error) {
-    return {
-      ok: false,
-      issues: [
-        {
-          level: 'error',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ],
-      outDir,
-    };
+  if (options.config) {
+    config = options.config;
+  } else {
+    try {
+      config = loadSiteConfig();
+    } catch (error) {
+      return {
+        ok: false,
+        issues: [
+          {
+            level: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        ],
+        outDir,
+      };
+    }
   }
 
   if (!isGitRepository(root)) {

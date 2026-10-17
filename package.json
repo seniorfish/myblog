@@ -9,6 +9,7 @@
   },
   "scripts": {
     "compile": "tsx scripts/compile.ts",
+    "prepare-theme": "tsx scripts/prepare-theme.ts",
     "dev": "tsx scripts/dev.ts",
     "build": "tsx scripts/build.ts",
     "preview": "npm --prefix .worktrees/default run preview",

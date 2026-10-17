@@ -123,6 +123,18 @@ export const anchorNoteSchema = z.object({
 
 export type AnchorNote = z.infer<typeof anchorNoteSchema>;
 
+export const themeContractSchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  model: z.string().min(1),
+  description: z.string().min(1),
+  author: z.string().min(1),
+  isDefault: z.boolean(),
+  version: z.string().min(1),
+});
+
+export type ThemeContract = z.infer<typeof themeContractSchema>;
+
 const displayRuleSchema = z.object({
   mode: z.enum(['excerpt', 'full', 'full-if-short', 'link']),
   maxChars: z.number().int().positive().optional(),
