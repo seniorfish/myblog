@@ -9,7 +9,7 @@ const config = {
   timezone: 'Asia/Shanghai',
   repo: 'seniorfish/myblog',
   defaultTheme: 'default',
-  themes: ['default'],
+  themes: ['default', 'terminal'],
   ui: {
     contentDisplay: {
       文章: { mode: 'excerpt' },

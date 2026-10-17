@@ -163,6 +163,7 @@ function renderRobots(site: SiteMeta): string {
     'Allow: /',
     'Disallow: /raw/',
     'Disallow: /proof/',
+    'Disallow: /_themes/',
     `Sitemap: ${site.url}/sitemap.xml`,
     '',
   ].join('\n');

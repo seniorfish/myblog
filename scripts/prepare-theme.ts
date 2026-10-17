@@ -23,24 +23,39 @@ function sha256File(filePath: string): string {
   return createHash('sha256').update(readFileSync(filePath)).digest('hex');
 }
 
-function ensureWorktree(root: string, id: string): string {
-  const branch = `theme/${id}`;
-  const dir = path.join(root, '.worktrees', id);
+function resolveRef(root: string, id: string, ref?: string): string {
+  if (ref) return ref;
 
+  const local = `theme/${id}`;
   try {
-    execFileSync('git', ['rev-parse', '--verify', branch], {
+    execFileSync('git', ['rev-parse', '--verify', local], {
       cwd: root,
       stdio: 'ignore',
     });
+    return local;
   } catch {
-    throw new Error(
-      `Theme branch "${branch}" does not exist. Create it with:\n` +
-        `  git worktree add --orphan -b ${branch} .worktrees/${id}`,
-    );
+    const remote = `origin/theme/${id}`;
+    try {
+      execFileSync('git', ['rev-parse', '--verify', remote], {
+        cwd: root,
+        stdio: 'ignore',
+      });
+      return remote;
+    } catch {
+      throw new Error(
+        `Theme branch "${local}" does not exist locally or at "${remote}".\n` +
+          `Create it with:\n  git worktree add --orphan -b ${local} .worktrees/${id}`,
+      );
+    }
   }
+}
+
+function ensureWorktree(root: string, id: string, ref?: string): string {
+  const dir = path.join(root, '.worktrees', id);
+  const resolvedRef = resolveRef(root, id, ref);
 
   if (!existsSync(dir)) {
-    execFileSync('git', ['worktree', 'add', dir, branch], {
+    execFileSync('git', ['worktree', 'add', dir, resolvedRef], {
       cwd: root,
       stdio: 'inherit',
     });
@@ -141,13 +156,13 @@ function gitOutput(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
-export function prepareTheme(root: string, id = 'default'): PreparedTheme {
+export function prepareTheme(root: string, id = 'default', ref?: string): PreparedTheme {
   if (!existsSync(path.join(root, 'build', 'generated', 'site-data.json'))) {
     throw new Error('build/generated/site-data.json is missing. Run `npm run compile` first.');
   }
 
   const config = loadSiteConfig();
-  const dir = ensureWorktree(root, id);
+  const dir = ensureWorktree(root, id, ref);
   const contract = readThemeContract(dir, id);
 
   copyFileSync(
@@ -173,12 +188,22 @@ export function prepareTheme(root: string, id = 'default'): PreparedTheme {
   syncGenerated(root, dir);
   installIfNeeded(root, dir);
 
+  let contentHash = '';
+  try {
+    contentHash = gitOutput(root, ['log', '-1', '--format=%h', '--', 'content']);
+  } catch {
+    contentHash = '';
+  }
+  if (!contentHash) {
+    contentHash = gitOutput(root, ['rev-parse', '--short', 'HEAD']);
+  }
+
   const env = {
     THEME_ID: id,
     THEME_MODEL: contract.model,
     THEME_GIT_HASH: gitOutput(dir, ['rev-parse', '--short', 'HEAD']),
     THEME_UPDATED_AT: gitOutput(dir, ['log', '-1', '--format=%cd', '--date=short']),
-    CONTENT_GIT_HASH: gitOutput(root, ['rev-parse', '--short', 'HEAD']),
+    CONTENT_GIT_HASH: contentHash,
     SITE_URL: config.url,
   };
 

@@ -16,6 +16,7 @@
   },
   "include": [
     "core/**/*.ts",
+    "host/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "site.config.ts"

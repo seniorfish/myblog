@@ -126,18 +126,76 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - 构建期宏：`__THEME_ID__`、`__THEME_MODEL__`、`__THEME_GIT_HASH__`、`__THEME_UPDATED_AT__`、`__CONTENT_GIT_HASH__`、`__BUILD_TIME__`。
 - `theme.contract.json` 的 `id` 必须与分支名一致；只有 `theme/default` 允许 `isDefault: true`。
 
-## 6. M2：多主题、VFS 与 Service Worker
+## 6. M2：多主题、VFS 与 Service Worker（已实现）
 
-- 构建每个主题，校验 `theme.contract.json` 与完整路由集合。
-- 默认主题输出铺在 `dist/` 根；所有主题打成 `/_themes/{id}.{vfsSha256}.vfs.json`（文件名必须含内容哈希）。
-- `manifest.json` 记录 `releaseId`、`contentHash`、`anchorsHash`、主题列表与 VFS 地址；`releaseId` 不包含构建时间。
-- Service Worker：
-  - 导航请求按 active theme 的 VFS 本地直出；未命中回退默认主题/网络。
-  - 主题切换通过 `postMessage` → 加载/校验 VFS → 页面 reload，URL 不变。
-  - `/manifest.json` network-only；30 分钟节流是惰性的（导航/可见时检查），不是后台常驻轮询。
-  - 保留上一 release，避免旧 tab 的旧 CSS/JS 失效。
-- VFS 体积硬上限 25MB/文件（Cloudflare Pages 限制）；初期目标 <2MB，5MB 警告。超限再考虑 Brotli、自压 + `DecompressionStream`、共享 content shard、客户端按数据构建或 CDN。
-- CI 触发：main 的 workflow 用 `push(main)` + `workflow_dispatch` + `schedule`；`theme/*` push 不会自动触发 main 的 workflow。build 与 deploy 分 job，build job 不接触 Cloudflare token。
+### 6.1 构建流水线
+
+`npm run build:all`（`scripts/build-all.ts`）：
+
+1. 编译内容，生成 `build/generated/`。
+2. 用 esbuild 构建 `host/sys.ts` → `build/runtime/sys.js`、`sw/sw.ts` → `build/runtime/sw.js`。
+3. 发现 `refs/heads/theme/*` 与 `refs/remotes/origin/theme/*`；本地优先，CI 用远端 ref。
+4. 对每个主题：`prepare-theme` → `astro build` → 注入 `/_sys/sys.js` 与 `<sys-theme-dock>`。
+5. 打包 VFS、校验路由/资源/raw/proof/search，生成 manifest，组装 `dist/`。
+
+### 6.2 VFS
+
+```json
+{
+  "schema": 1,
+  "themeId": "terminal",
+  "files": {
+    "/": { "type": "text/html; charset=utf-8", "body": "..." },
+    "/n/hello": { "type": "text/html; charset=utf-8", "body": "..." },
+    "/_astro/xxx.css": { "type": "text/css; charset=utf-8", "body": "..." },
+    "/_sys/sys.js": { "type": "text/javascript; charset=utf-8", "body": "..." },
+    "/raw/hello.md": { "type": "text/markdown; charset=utf-8", "body": "..." },
+    "/proof/hello.json": { "type": "application/json; charset=utf-8", "body": "..." },
+    "/search-index.json": { "type": "application/json; charset=utf-8", "body": "..." }
+  }
+}
+```
+
+- 路径归一化：`index.html` → `/`，`n/foo.html` → `/n/foo`，`404.html` → `/404`；非 ASCII 段用 `encodeURIComponent`。
+- 文件名 `/_themes/{id}.{vfsSha256}.vfs.json`；manifest 记录同一哈希。无哈希文件名不能设 `immutable`。
+- 体积硬上限 25MB/文件（Cloudflare Pages），5MB 起警告；当前每个主题约 110KB。
+
+### 6.3 manifest 与 releaseId
+
+- `manifest.json`：`releaseId`、`contentHash`、`anchorsHash`、`defaultTheme`、`site`、`chain`、`themes[]`。
+- 每个主题：`id`、`displayName`、`model`、`description`、`author`、`isDefault`、`commit`、`updatedAt`、`vfsUrl`、`vfsSha256`、`sizeKB`。
+- `releaseId = SHA-256(contentHash, anchorsHash, 站点配置, 主题 commits + VFS hashes)`；**不包含构建时间**。
+- 主题 HTML 里的 `__CONTENT_GIT_HASH__` 取“最后一次修改 `content/` 的提交”，因此只改文档/脚本不会让所有客户端重新下载。
+
+### 6.4 宿主运行时
+
+- `host/sys.ts` 注册 `<sys-theme-dock>` 并注册 `/sw.js`。
+- 构建后注入每个主题 HTML：head 里的 `<script type="module" src="/_sys/sys.js">` 与 body 末尾的 `<sys-theme-dock>`；主题无需自己实现。
+- dock 通过 MessageChannel 与 SW 通信：`GET_STATE`、`SET_THEME`；显示主题列表、commit、cached 状态与更新提示。
+- 主题可通过 CSS 变量桥接配色：`--sys-bg`、`--sys-fg`、`--sys-muted`、`--sys-border`、`--sys-font`。
+
+### 6.5 Service Worker
+
+存储：
+
+- IndexedDB `myblog-sw` / `meta`：`activeThemeId`、`activeReleaseId`、`previousReleaseId`、`manifest`、`lastCheckAt`、`pending*`。
+- CacheStorage：`myblog-vfs-v1:<releaseId>:<themeId>` 每个主题一份；保留 active、previous、pending release。
+
+启动与导航：
+
+- `install`：拉 manifest，缓存 active theme（与默认主题）VFS，校验 SHA-256，`skipWaiting`。
+- `activate`：`clients.claim()`。
+- 导航：先 promote pending（若有），再按 `canonicalPath` 在 active VFS 查找；未命中依次尝试 previous release、默认主题、`/404`、网络。
+- 子资源：任何同源 GET 先查 active/previous/default VFS，再走网络；`/sw.js`、`/manifest.json`、`/_themes/*` 明确绕过。
+- 主题切换：`SET_THEME` → 拉取/校验/写入目标 VFS → 写 `activeThemeId` → ACK；页面 reload，URL 不变。
+- 30 分钟检查：导航/可见时惰性执行，先写 `lastCheckAt` 防抖；`releaseId` 变化时缓存新 VFS，设置 pending，发 `UPDATE_READY`；下一次导航自动 promote。
+- 离线：文本资源来自 VFS；R2 图片需访问过才有缓存（M3）。
+
+### 6.6 本地验证
+
+- `npm run serve`：`scripts/serve.ts` 静态服务器（clean URL、SW 头、`_headers` 等价缓存头）。
+- `npm run test:e2e`：`playwright-core` + 本机 Chrome，验证“默认主题 → SW 接管 → 切 Terminal → URL 不变 → 断网导航”。
+- CI：`.github/workflows/build.yml` 在 main push / 手动 / 每 30 分钟构建，上传 `dist` artifact；不带 deploy，避免 build job 接触 Cloudflare token。`theme/*` push 不会自动触发 main 的 workflow。
 
 ## 7. M3：媒体与部署
 
@@ -153,6 +211,12 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - 博客短期 <100 篇，锚定覆盖使用最简单的 O(n) 线性扫描。
 - 主题源码是可信代码，但仍保持 build/deploy 分离，构建 job 不挂敏感 secret。
 - 一键核验依赖公开 GitHub 仓库；私有仓库时 `sys-chain-proof` 降级。
+- 离线只保证文本（HTML/CSS/JS/raw/proof/search）；R2 图片需被访问过才有本地缓存。
+- 30 分钟更新检查是惰性的，SW 休眠时不保证按时轮询。
+- VFS 单文件硬上限 25MB；当前每主题约 110KB。接近上限时再拆共享 content shard 或做压缩。
+- SW 只保留 active / previous / pending release；更老的 tab 可能加载不到旧哈希资源。
+- `npm run test:e2e` 依赖本机 Chrome，CI 只跑单元测试与 build:all 校验。
+- `sw.js`、`sys.js` 不参与 VFS 内容哈希；靠 `Cache-Control: no-cache` 让浏览器重新校验。
 
 ## 9. 参考
 

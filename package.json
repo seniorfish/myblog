@@ -12,9 +12,13 @@
     "prepare-theme": "tsx scripts/prepare-theme.ts",
     "dev": "tsx scripts/dev.ts",
     "build": "tsx scripts/build.ts",
+    "build:all": "tsx scripts/build-all.ts",
+    "build:runtime": "tsx scripts/build-runtime.ts",
     "preview": "npm --prefix .worktrees/default run preview",
+    "serve": "tsx scripts/serve.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test:e2e": "tsx scripts/e2e.ts",
+    "typecheck": "tsc --noEmit && tsc -p sw/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@shikijs/rehype": "4.5.0",
@@ -39,6 +43,8 @@
     "@types/node": "26.6.5",
     "@types/unist": "^3.0.3",
     "chokidar": "5.0.0",
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.64.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.5"

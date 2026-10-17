@@ -2,7 +2,11 @@
 
 一个面向 AI 主题生成、Git/链上时间戳与本地优先体验的个人博客。
 
-当前状态：**里程碑 1（M1）**。内容编译、默认主题、本地开发与静态构建已打通；多主题 VFS、Service Worker、链上锚定、R2 图床与 Cloudflare Pages 部署属于后续里程碑。
+当前状态：**M1 + M2 已完成**。
+
+- M1：内容编译器、默认主题、本地开发与静态构建。
+- M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
+- M3（未实现）：Base Sepolia 链上锚定、R2 图床、Cloudflare Pages 部署。
 
 ## 快速开始
 
@@ -14,43 +18,87 @@ npm install
 npm run dev
 ```
 
-`npm run dev` 会：
+`npm run dev` 编译内容、把共享工具链注入 `.worktrees/default`，然后在默认主题 worktree 里启动 Astro dev。若 4321 端口被占用，Astro 会打印实际端口。
 
-1. 读取 `content/` 与 Git 历史，生成 `build/generated/site-data.json` 等产物；
-2. 把共享工具链注入 `.worktrees/default`；
-3. 在主题 worktree 里启动 Astro dev。
+开发另一个主题：
 
-Astro 默认使用 4321 端口；如果该端口已被占用，终端会打印实际端口。
+```powershell
+npm run dev -- terminal
+```
+
+## 构建与预览
+
+```powershell
+npm run build       # 只构建默认主题，输出 dist/
+npm run build:all   # 构建所有 theme/*，打包 VFS + manifest，组装完整 dist/
+npm run serve       # 本地静态服务器，默认 http://127.0.0.1:8080
+npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 → 断网可用
+```
+
+`npm run test:e2e` 需要本机 Chrome；可通过 `CHROME_PATH` 指定路径。
 
 其他命令：
 
 | 命令 | 作用 |
 | --- | --- |
 | `npm run compile` | 只运行内容编译器 |
-| `npm run build` | 编译 + 构建默认主题，输出到 `dist/` |
-| `npm run preview` | 在主题 worktree 里运行 Astro preview |
-| `npm test` | Vitest |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run prepare-theme -- <id>` | 准备某个主题的 worktree 与依赖 |
+| `npm test` | Vitest 单元/集成测试 |
+| `npm run typecheck` | 主程序 + Service Worker 类型检查 |
+| `npm run build:runtime` | 单独构建 `host/sys.ts` 与 `sw/sw.ts` |
+
+## 主题博物馆
+
+M2 内置两个主题：
+
+- `theme/default`：Default Minimal，默认铺在根路径。
+- `theme/terminal`：Terminal，深色等宽终端风。
+
+构建后 `dist/` 同时包含：
+
+```text
+index.html / n/*.html / 404.html     # 默认主题（SEO 直出）
+_themes/default.<sha>.vfs.json       # 全站文本 VFS
+_themes/terminal.<sha>.vfs.json
+manifest.json                        # releaseId + 主题元数据
+sw.js                                # Service Worker
+_sys/sys.js                          # 主题 dock + SW 注册
+_headers                             # Cloudflare Pages 缓存策略
+raw/ proof/ search-index.json        # 共享文本产物
+```
+
+浏览器首次加载默认主题；Service Worker 激活后，右下角出现 `Themes` 胶囊。切换主题时 URL 不变，SW 从本地 VFS 返回目标主题的 HTML/CSS/JS。已缓存过的站内导航与断网导航都不需要网络。
 
 ## 仓库结构
 
 ```text
 content/          所有 .md 内容
-core/             编译器、数据契约、Git/锚定逻辑
-scripts/          compile / prepare-theme / dev / build
+core/             编译器、契约、Git/锚定、VFS 纯逻辑
+host/             sys-theme-dock 宿主组件（TypeScript）
+sw/               Service Worker（TypeScript）
+scripts/          compile / prepare-theme / dev / build / build-all / serve / e2e
 theme-harness/    Astro + Tailwind 共享工具链（main）
 tests/            Vitest
 .worktrees/       theme/* 分支的本地 worktree（gitignore）
-build/generated/  编译产物（gitignore）
-dist/             最终静态输出（gitignore）
+build/generated/  编译器产物（gitignore）
+build/runtime/    sys.js / sw.js（gitignore）
+dist/             最终部署产物（gitignore）
 ```
 
 ## 分支
 
-- `main`：内容、编译器、契约、构建脚本、文档。
-- `theme/default`：默认主题的 UI 源码。它是孤儿分支，只提交 `src/`、`public/`、`theme.contract.json`、`AGENTS.md`；harness 文件与 `src/generated/` 由脚本注入并忽略。
+- `main`：内容、编译器、契约、运行时、构建脚本、文档。
+- `theme/default`：默认主题 UI（孤儿分支）。
+- `theme/terminal`：终端风参考主题（孤儿分支）。
 
-未来每个 AI 主题是一个新的孤儿分支 `theme/<model>`，只实现 UI，不碰数据层。
+主题分支只提交 `src/`、`public/`、`theme.contract.json`、可选 `theme.package.json`、`AGENTS.md`；harness 与 `src/generated/` 由脚本注入并忽略。
+
+## 离线与缓存边界
+
+- 离线保证 HTML/CSS/JS、raw、proof、search-index 等**文本**可用。
+- R2 图片只有被访问过才在本地缓存（M3）。
+- 更新检查是**惰性**的：只在导航/页面可见时执行，且距上次检查至少 30 分钟；SW 休眠时不保证按时轮询。
+- VFS 单文件硬上限 25MB（Cloudflare Pages）；初期约 110KB/主题。
 
 ## 内容与时间
 
@@ -63,7 +111,7 @@ dist/             最终静态输出（gitignore）
 
 ## 设计文档
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构、M1 实现、M2/M3 接口与边界。
+- [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构、M1/M2 实现、M3 接口与边界。
 - [AGENTS.md](AGENTS.md)：给未来 AI 的工作约束。
 - [THEME_AGENT_PROMPT.md](THEME_AGENT_PROMPT.md)：新主题的复制即用提示词。
 

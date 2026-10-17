@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Every 30 minutes, offset from the hour to avoid fleet-wide spikes.
+    - cron: '7,37 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blog-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch theme branches and blockchain notes
+        run: |
+          git fetch --prune origin \
+            '+refs/heads/theme/*:refs/remotes/origin/theme/*' \
+            '+refs/notes/*:refs/notes/*' || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install compiler dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build all themes and assemble dist
+        run: npm run build:all
+        env:
+          CI: 'true'
+
+      - name: Validate deployment artifacts
+        run: |
+          test -f dist/index.html
+          test -f dist/404.html
+          test -f dist/manifest.json
+          test -f dist/sw.js
+          test -f dist/_headers
+          test -d dist/_themes
+          test -f dist/_sys/sys.js
+
+      - name: Summarize themes
+        run: |
+          echo '## Themes' >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.themes[] | "- `\(.id)`: \(.sizeKB) KiB, commit `\(.commit)`, default=\(.isDefault)"' \
+            dist/manifest.json >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo "Release: \`$(jq -r '.releaseId' dist/manifest.json)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blog-dist
+          path: dist
+          retention-days: 7

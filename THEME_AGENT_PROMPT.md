@@ -27,6 +27,29 @@
 - `core/`、`scripts/`、`theme-harness/`（在 main 分支）
 - 不要读 `content/`，不要自己解析 Markdown
 
+## 运行时注入
+
+`build:all` 会自动在每个 HTML 里注入：
+
+```html
+<script type="module" src="/_sys/sys.js"></script>
+<sys-theme-dock></sys-theme-dock>
+```
+
+所以**不要**自己实现主题切换器或注册 Service Worker。你只需：
+
+- 在 `<html>` 上设置 `data-theme-id={__THEME_ID__}`（用于端到端验证与调试）。
+- 可选地在 CSS 里桥接 dock 配色：
+  ```css
+  sys-theme-dock {
+    --sys-bg: var(--surface);
+    --sys-fg: var(--text);
+    --sys-muted: var(--muted);
+    --sys-border: var(--border);
+    --sys-font: var(--font-mono);
+  }
+  ```
+
 ## 必须实现的路由
 
 - `/`：首页时间流。按 `node.displayDate.year` 分组；按 `site.ui.contentDisplay` 决定展开策略：
@@ -67,7 +90,15 @@
 npm run build
 ```
 
-确认 `dist/index.html`、`dist/n/*.html`、`dist/404.html` 都存在。然后在 `theme/<id>` 分支提交：
+确认 `dist/index.html`、`dist/n/*.html`、`dist/404.html` 都存在。回到 main 后可以跑：
+
+```powershell
+npm run build:all
+npm run serve
+npm run test:e2e
+```
+
+验证该主题能被打包、切换与离线访问。然后在 `theme/<id>` 分支提交：
 
 ```powershell
 git add src public theme.contract.json theme.package.json
