@@ -709,6 +709,15 @@ button {
   opacity: 0.8;
 }
 
+/* Host runtime theme bridge */
+sys-theme-dock {
+  --sys-bg: var(--surface);
+  --sys-fg: var(--text);
+  --sys-muted: var(--muted);
+  --sys-border: var(--border);
+  --sys-font: var(--font-mono);
+}
+
 /* Progressive motion */
 @view-transition {
   navigation: auto;
