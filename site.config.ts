@@ -10,6 +10,7 @@ const config = {
   repo: 'seniorfish/myblog',
   defaultTheme: 'default',
   themes: ['default', 'terminal'],
+  homeTag: '首页',
   ui: {
     contentDisplay: {
       文章: { mode: 'excerpt' },

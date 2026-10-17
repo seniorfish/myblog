@@ -60,6 +60,7 @@ npm run prepare-theme -- default
 11. **VFS 文件名必须含内容哈希**：`/_themes/{id}.{vfsSha256}.vfs.json`；不要改成无哈希固定名再设 immutable。
 12. **不要破坏 canonical 路径**：`index.html`→`/`，`n/foo.html`→`/n/foo`，`404.html`→`/404`。改动后跑 `npm run build:all` 与 `npm run test:e2e`。
 13. **theme.contract.json 的 id 必须等于分支名**；只有 `theme/default` 允许 `isDefault: true`。
+14. **首页节点**：主 Tag = `site.config.ts` 的 `homeTag`（默认 `首页`），全站最多一个已发布；`url='/'`，不生成 `/n/{id}`，从 `/archive`、RSS、sitemap、搜索中排除。主题用 `SiteData.homeNodeId` 找到它，并在 `/` 渲染其 HTML；索引页固定为 `/archive`。
 
 ## 数据流
 

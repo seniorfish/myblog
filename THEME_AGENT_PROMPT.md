@@ -52,14 +52,17 @@
 
 ## 必须实现的路由
 
-- `/`：首页时间流。按 `node.displayDate.year` 分组；按 `site.ui.contentDisplay` 决定展开策略：
+- `/`：如果 `data.homeNodeId` 存在，找到该节点并在 `/` 渲染 `node.html`（自我介绍）；否则回退到时间流。
+- `/archive`：文章索引。过滤掉 `data.homeNodeId` 后，按 `node.displayDate.year` 分组；按 `site.ui.contentDisplay` 决定展开策略：
   - `文章`：摘要 + 链接
   - `想法`：`plainTextLength <= maxChars` 时展开全文
   - `闪念`：整条内联
   - `收藏`：外链卡片
   - 未知主 Tag：摘要
-- `/n/{id}`：详情页。正文用 `<div class="prose" set:html={node.html} />`；展示 `node.parent` 的前情提要、`node.children` 的后续进展、`node.revisions` 的修订与存证。
+- `/n/{id}`：详情页；`getStaticPaths` 必须过滤掉 `data.homeNodeId`（首页节点没有 `/n/{id}`）。正文用 `<div class="prose" set:html={node.html} />`；展示 `node.parent` 的前情提要、`node.children` 的后续进展、`node.revisions` 的修订与存证。
 - `/404`。
+
+页头加一个指向 `/archive` 的“索引”链接。首页节点在 `nodes` 里仍有 `url='/'`，不要给它生成 `/n/{id}`。
 
 ## 数据契约
 

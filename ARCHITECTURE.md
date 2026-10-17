@@ -77,6 +77,8 @@ draft: false          # 可选
   - `收藏`：外链卡片。
   - 未知 Tag：回退 `excerpt`。
 - `extends` 单向声明，编译期成树；断链/环/指向 draft 都会让编译失败。
+- **首页节点**：主 Tag 等于 `site.config.ts` 的 `homeTag`（默认 `首页`）的节点。全站最多一个已发布首页节点；它的 `url` 被设为 `/`，不生成 `/n/{id}` 详情页，并从 `/archive`、RSS、sitemap、搜索中排除。`SiteData.homeNodeId` 告诉主题哪个节点是首页。
+- **索引页**：`/archive`，渲染除首页节点外的全部内容；页头有“索引”链接。
 
 ## 4. 时间与存证
 
@@ -136,7 +138,7 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 2. 用 esbuild 构建 `host/sys.ts` → `build/runtime/sys.js`、`sw/sw.ts` → `build/runtime/sw.js`。
 3. 发现 `refs/heads/theme/*` 与 `refs/remotes/origin/theme/*`；本地优先，CI 用远端 ref。
 4. 对每个主题：`prepare-theme` → `astro build` → 注入 `/_sys/sys.js` 与 `<sys-theme-dock>`。
-5. 打包 VFS、校验路由/资源/raw/proof/search，生成 manifest，组装 `dist/`。
+5. 打包 VFS、校验路由/资源/raw/proof/search（含 `/archive`；首页节点使用 `/`，不生成 `/n/home`），生成 manifest，组装 `dist/`。
 
 ### 6.2 VFS
 

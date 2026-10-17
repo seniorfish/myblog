@@ -34,6 +34,7 @@ function testConfig(chainEnabled = true): SiteConfig {
     repo: 'tester/blog',
     defaultTheme: 'default',
     themes: ['default'],
+    homeTag: '首页',
     ui: {
       contentDisplay: {
         文章: { mode: 'excerpt' },
@@ -123,6 +124,61 @@ describe('compileSite', () => {
     await access(path.join(outDir, 'search-index.json'));
     await access(path.join(outDir, 'raw/hello.md'));
     await access(path.join(outDir, 'build-meta.json'));
+  });
+
+  it('renders the homepage node at / and keeps it out of feeds', async () => {
+    await writeFile(
+      path.join(repo, 'content', 'home.md'),
+      '---\ntags: 首页\ntitle: Home Intro\ndescription: Hello.\n---\n\nWelcome home.\n',
+    );
+    await commitAll('home', '2024-01-02T00:00:00Z');
+
+    const outDir = path.join(repo, 'out');
+    const result = await compileSite({
+      root: repo,
+      outDir,
+      config: testConfig(false),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.siteData?.homeNodeId).toBe('home');
+    expect(result.siteData?.nodes.find((node) => node.id === 'home')?.url).toBe('/');
+
+    const rss = await readFile(path.join(outDir, 'rss.xml'), 'utf8');
+    expect(rss).not.toContain('Home Intro');
+
+    const sitemap = await readFile(path.join(outDir, 'sitemap.xml'), 'utf8');
+    expect(sitemap).toContain('https://example.com/archive');
+    expect(sitemap).not.toContain('/n/home');
+
+    const search = JSON.parse(
+      await readFile(path.join(outDir, 'search-index.json'), 'utf8'),
+    ) as { docs: Array<{ id: string }> };
+    expect(search.docs.some((doc) => doc.id === 'home')).toBe(false);
+    expect(search.docs.some((doc) => doc.id === 'hello')).toBe(true);
+  });
+
+  it('rejects multiple homepage nodes', async () => {
+    await writeFile(
+      path.join(repo, 'content', 'home-a.md'),
+      '---\ntags: 首页\n---\nA\n',
+    );
+    await writeFile(
+      path.join(repo, 'content', 'home-b.md'),
+      '---\ntags: 首页\n---\nB\n',
+    );
+    await commitAll('homes', '2024-01-02T00:00:00Z');
+
+    const result = await compileSite({
+      root: repo,
+      outDir: path.join(repo, 'out'),
+      config: testConfig(false),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes('Multiple homepage')),
+    ).toBe(true);
   });
 
   it('keeps buildId stable across repeated builds', async () => {

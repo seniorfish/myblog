@@ -150,6 +150,7 @@ export const siteConfigSchema = z.object({
   repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
   defaultTheme: z.string().min(1),
   themes: z.array(z.string().min(1)).min(1),
+  homeTag: z.string().min(1),
   ui: z
     .object({
       contentDisplay: z.record(z.string(), displayRuleSchema).optional(),

@@ -256,7 +256,7 @@ async function packageTheme(
   }
 
   const routeCount = validateVfs(vfs, {
-    routes: siteData.nodes.map((node) => node.url),
+    routes: ['/archive', ...siteData.nodes.map((node) => node.url)],
     nodeIds: siteData.nodes.map((node) => node.id),
   });
   return {

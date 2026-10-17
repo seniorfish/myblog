@@ -28,6 +28,26 @@ draft: false
 
 **不要写日期。** `date`、`pubDate`、`createdAt`、`updatedAt` 等字段会让编译直接失败；时间由 Git 提交与链上锚定推导。
 
+## 首页（主 Tag: 首页）
+
+- 全站只能有**一个已发布**的节点使用 `site.config.ts` 里的 `homeTag`（默认 `首页`）；多个会让编译失败。
+- 它渲染在 `/`，并从索引 `/archive`、RSS、sitemap、搜索中排除。
+- 首页节点不生成 `/n/{id}` 详情页；它的 `raw/` 与 `proof/` 仍会生成。
+- 首页内容用标准 Markdown，建议写自我介绍、正在做的事和常用链接。
+- 首页页脚会自动带上该节点的“修订与存证”折叠框。
+
+```yaml
+---
+tags: 首页
+title: 你好，我是……
+description: 一句话介绍。
+---
+
+你好，我是……
+```
+
+文章索引在 `/archive`；站点页头有“索引”链接。
+
 ## 四种主 Tag
 
 ```yaml

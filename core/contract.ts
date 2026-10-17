@@ -38,6 +38,8 @@ export interface SiteConfig {
   repo: string;
   defaultTheme: string;
   themes: string[];
+  /** Primary tag used by the single homepage node. */
+  homeTag: string;
   ui?: SiteUiConfig;
   chain: ChainConfig;
 }
@@ -150,6 +152,8 @@ export interface SiteData {
   schema: 1;
   site: SiteMeta;
   nodes: ContentNode[];
+  /** Node rendered at / instead of /n/{id}; excluded from archive and feeds. */
+  homeNodeId?: string;
 }
 
 export interface SearchDoc {

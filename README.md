@@ -47,6 +47,13 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 | `npm run typecheck` | 主程序 + Service Worker 类型检查 |
 | `npm run build:runtime` | 单独构建 `host/sys.ts` 与 `sw/sw.ts` |
 
+## 首页与索引
+
+- `content/home.md`（主 Tag `首页`，可在 `site.config.ts` 的 `homeTag` 修改）渲染在 `/`，用来写自我介绍。
+- 全站只能有一个已发布的首页节点；它会从索引、RSS、sitemap、搜索中排除。
+- 文章索引在 `/archive`，页头有“索引”链接。
+- 首页节点不生成 `/n/{id}` 详情页，但仍保留 raw/proof 存证产物。
+
 ## 主题博物馆
 
 M2 内置两个主题：

@@ -93,8 +93,13 @@ function itemTitle(node: ContentNode): string {
   return node.title ?? `[${node.primaryTag}] ${node.displayTitle}`;
 }
 
-function renderRss(site: SiteMeta, nodes: ContentNode[]): string {
+function renderRss(
+  site: SiteMeta,
+  nodes: ContentNode[],
+  homeNodeId?: string,
+): string {
   const items = nodes
+    .filter((node) => node.id !== homeNodeId)
     .map((node) => {
       const link = `${site.url}${node.url}`;
       const pubDate = new Date(node.displayTime * 1000).toUTCString();
@@ -138,11 +143,17 @@ function renderRss(site: SiteMeta, nodes: ContentNode[]): string {
   ].join('\n');
 }
 
-function renderSitemap(site: SiteMeta, nodes: ContentNode[]): string {
+function renderSitemap(
+  site: SiteMeta,
+  nodes: ContentNode[],
+  homeNodeId?: string,
+): string {
+  const contentNodes = nodes.filter((node) => node.id !== homeNodeId);
   const newest = nodes[0]?.displayDate.iso ?? site.builtAt.slice(0, 10);
   const urls = [
     `  <url><loc>${escapeXml(`${site.url}/`)}</loc><lastmod>${newest}</lastmod></url>`,
-    ...nodes.map(
+    `  <url><loc>${escapeXml(`${site.url}/archive`)}</loc><lastmod>${newest}</lastmod></url>`,
+    ...contentNodes.map(
       (node) =>
         `  <url><loc>${escapeXml(`${site.url}${node.url}`)}</loc><lastmod>${node.displayDate.iso}</lastmod></url>`,
     ),
@@ -190,8 +201,11 @@ async function writeOutputFiles(
 
   await write('site-data.json', json(siteData));
   await write('search-index.json', json(searchIndex));
-  await write('rss.xml', renderRss(siteData.site, siteData.nodes));
-  await write('sitemap.xml', renderSitemap(siteData.site, siteData.nodes));
+  await write('rss.xml', renderRss(siteData.site, siteData.nodes, siteData.homeNodeId));
+  await write(
+    'sitemap.xml',
+    renderSitemap(siteData.site, siteData.nodes, siteData.homeNodeId),
+  );
   await write('robots.txt', renderRobots(siteData.site));
   await write('build-meta.json', json(buildMeta));
 
@@ -343,6 +357,27 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
     return { ok: false, issues, outDir };
   }
 
+  const homeEntries = discovered.entries.filter(
+    (entry) =>
+      entry.tags.primaryTag === config.homeTag &&
+      !(entry.frontmatter.draft ?? false),
+  );
+  if (homeEntries.length > 1) {
+    return {
+      ok: false,
+      issues: [
+        {
+          level: 'error',
+          message: `Multiple homepage nodes use the "${config.homeTag}" tag: ${homeEntries
+            .map((entry) => entry.relPath)
+            .join(', ')}. Keep exactly one.`,
+        },
+      ],
+      outDir,
+    };
+  }
+  const homeNodeId = homeEntries[0]?.id;
+
   const warnings: string[] = [];
   const commits = getFirstParentCommitList(root);
   const notes = readAnchorNotes(root);
@@ -377,10 +412,11 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
       entry.frontmatter.title ??
       bookmarkHost(entry.frontmatter.url) ??
       autoTitle;
+    const isHome = entry.id === homeNodeId;
 
     const node: ContentNode = {
       id: entry.id,
-      url: nodeUrl(entry.id),
+      url: isHome ? '/' : nodeUrl(entry.id),
       rawTags: treeNode.rawTags,
       primaryTag: treeNode.primaryTag,
       secondaryTags: treeNode.secondaryTags,
@@ -489,11 +525,14 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
     schema: 1,
     site,
     nodes: publishedNodes,
+    homeNodeId,
   };
 
   const searchIndex: SearchIndex = {
     schema: 1,
-    docs: publishedNodes.map((node) => ({
+    docs: publishedNodes
+      .filter((node) => node.id !== homeNodeId)
+      .map((node) => ({
       id: node.id,
       url: node.url,
       title: itemTitle(node),
