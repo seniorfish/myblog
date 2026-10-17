@@ -27,52 +27,60 @@ const { tags, total } = Astro.props;
 
 <script is:inline>
   (() => {
-    const buttons = Array.from(document.querySelectorAll('[data-tag]'));
-    const items = Array.from(document.querySelectorAll('[data-filter-item]'));
-    const groups = Array.from(document.querySelectorAll('[data-year-group]'));
-    if (buttons.length === 0) return;
+    const init = () => {
+      const buttons = Array.from(document.querySelectorAll('[data-tag]'));
+      const items = Array.from(document.querySelectorAll('[data-filter-item]'));
+      const groups = Array.from(document.querySelectorAll('[data-year-group]'));
+      if (buttons.length === 0) return;
 
-    const params = new URLSearchParams(location.search);
-    let selected = params.get('tag') ?? '全部';
-    if (!buttons.some((button) => button.dataset.tag === selected)) {
-      selected = '全部';
-    }
-
-    const apply = (tag, updateUrl) => {
-      for (const item of items) {
-        const tags = (item.dataset.tags ?? '').split(/\s+/).filter(Boolean);
-        item.hidden = tag !== '全部' && !tags.includes(tag);
+      const params = new URLSearchParams(location.search);
+      let selected = params.get('tag') ?? '全部';
+      if (!buttons.some((button) => button.dataset.tag === selected)) {
+        selected = '全部';
       }
 
-      for (const group of groups) {
-        const visible = Array.from(group.querySelectorAll('[data-filter-item]')).some(
-          (item) => !item.hidden,
-        );
-        group.hidden = !visible;
-      }
+      const apply = (tag, updateUrl) => {
+        for (const item of items) {
+          const tags = (item.dataset.tags ?? '').split(/\s+/).filter(Boolean);
+          item.hidden = tag !== '全部' && !tags.includes(tag);
+        }
+
+        for (const group of groups) {
+          const visible = Array.from(group.querySelectorAll('[data-filter-item]')).some(
+            (item) => !item.hidden,
+          );
+          group.hidden = !visible;
+        }
+
+        for (const button of buttons) {
+          button.setAttribute('aria-pressed', String(button.dataset.tag === tag));
+        }
+
+        if (updateUrl) {
+          const url = new URL(location.href);
+          if (tag === '全部') {
+            url.searchParams.delete('tag');
+          } else {
+            url.searchParams.set('tag', tag);
+          }
+          history.replaceState(null, '', url);
+        }
+      };
 
       for (const button of buttons) {
-        button.setAttribute('aria-pressed', String(button.dataset.tag === tag));
+        button.addEventListener('click', () => {
+          selected = button.dataset.tag;
+          apply(selected, true);
+        });
       }
 
-      if (updateUrl) {
-        const url = new URL(location.href);
-        if (tag === '全部') {
-          url.searchParams.delete('tag');
-        } else {
-          url.searchParams.set('tag', tag);
-        }
-        history.replaceState(null, '', url);
-      }
+      apply(selected, false);
     };
 
-    for (const button of buttons) {
-      button.addEventListener('click', () => {
-        selected = button.dataset.tag;
-        apply(selected, true);
-      });
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+      init();
     }
-
-    apply(selected, false);
   })();
 </script>
