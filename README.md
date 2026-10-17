@@ -54,6 +54,21 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 - 文章索引在 `/archive`，页头有“索引”链接。
 - 首页节点不生成 `/n/{id}` 详情页，但仍保留 raw/proof 存证产物。
 
+## 开发期 Service Worker 更新
+
+- 本地 `npm run build:all` 默认把内容更新检查间隔设为 **1000ms**；CI 设为 **30 分钟**。
+- 如需覆盖：
+
+  ```powershell
+  $env:SW_CHECK_INTERVAL_MS = 1000
+  npm run build:all
+  ```
+
+- 每次本地构建默认生成新的 `SW_BUILD_ID`（时间戳），`sw.js` 字节会变化，浏览器下次加载会安装新 worker；CI 使用 commit SHA。
+- 打开主题 dock，点“检查”可强制立即检查 `manifest.json`；有新内容时会出现“刷新”。
+- 如果浏览器仍然停留在旧 SW：DevTools → Application → Service Workers → **Update** 或 **Unregister**，然后硬刷新；或清除该站点的站点数据。
+- 控制台会打印 `[sw] build ...; update check interval ...ms`，可据此确认版本与间隔。
+
 ## 主题博物馆
 
 M2 内置两个主题：

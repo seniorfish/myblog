@@ -51,6 +51,8 @@ jobs:
         run: npm run build:all
         env:
           CI: 'true'
+          SW_CHECK_INTERVAL_MS: '1800000'
+          SW_BUILD_ID: ${{ github.sha }}
 
       - name: Validate deployment artifacts
         run: |

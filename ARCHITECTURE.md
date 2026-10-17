@@ -190,7 +190,8 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - 导航：先 promote pending（若有），再按 `canonicalPath` 在 active VFS 查找；未命中依次尝试 previous release、默认主题、`/404`、网络。
 - 子资源：任何同源 GET 先查 active/previous/default VFS，再走网络；`/sw.js`、`/manifest.json`、`/_themes/*` 明确绕过。
 - 主题切换：`SET_THEME` → 拉取/校验/写入目标 VFS → 写 `activeThemeId` → ACK；页面 reload，URL 不变。
-- 30 分钟检查：导航/可见时惰性执行，先写 `lastCheckAt` 防抖；`releaseId` 变化时缓存新 VFS，设置 pending，发 `UPDATE_READY`；下一次导航自动 promote。
+- 更新检查：导航/可见时惰性执行，先写 `lastCheckAt` 防抖；间隔由构建期 `__SW_CHECK_INTERVAL_MS__` 注入——本地默认 **1000ms**，CI/生产 **30 分钟**，可用 `SW_CHECK_INTERVAL_MS` 覆盖。dock 的“检查”按钮通过 `CHECK_UPDATE` 强制忽略 TTL。`releaseId` 变化时缓存新 VFS，设置 pending，发 `UPDATE_READY`；下一次导航自动 promote。
+- `sw.js` 包含 `__SW_BUILD__` 构建标记：本地默认时间戳，CI 用 commit SHA；确保每次构建的 worker 字节变化，浏览器会安装新 worker。
 - 离线：文本资源来自 VFS；R2 图片需访问过才有缓存（M3）。
 
 ### 6.6 本地验证

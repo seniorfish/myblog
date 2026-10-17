@@ -328,7 +328,17 @@ async function main(): Promise<void> {
 
   const siteData = compileResult.siteData;
   const buildMeta = compileResult.buildMeta;
-  const runtime = await buildRuntime(root);
+  const checkIntervalMs = Number(
+    process.env.SW_CHECK_INTERVAL_MS ??
+      (process.env.CI === 'true' ? 30 * 60 * 1000 : 1000),
+  );
+  const runtime = await buildRuntime(root, {
+    checkIntervalMs,
+    buildId: process.env.SW_BUILD_ID,
+  });
+  console.log(
+    `SW check interval: ${runtime.checkIntervalMs}ms; build ${runtime.buildId}`,
+  );
 
   const branches = discoverThemes(root);
   if (branches.length === 0) {

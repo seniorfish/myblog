@@ -401,13 +401,15 @@ class ThemeDock extends HTMLElement {
     }
   }
 
-  private updateStatus(): void {
+  private updateStatus(message?: string): void {
     if (!this.state) return;
 
     this.status.replaceChildren();
 
     const text = document.createElement('span');
-    if (!navigator.serviceWorker?.controller) {
+    if (message) {
+      text.textContent = message;
+    } else if (!navigator.serviceWorker?.controller) {
       text.textContent = '首次访问：刷新后启用主题切换';
     } else if (this.state.updateReady) {
       text.textContent = '有新内容，刷新后生效';
@@ -428,11 +430,51 @@ class ThemeDock extends HTMLElement {
       this.status.append(refresh);
     }
 
+    if (navigator.serviceWorker?.controller) {
+      const check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'refresh';
+      check.textContent = '检查';
+      check.addEventListener('click', () => {
+        void this.checkForUpdate();
+      });
+      this.status.append(check);
+    }
+
     const dot = this.root.querySelector('.dot');
     if (dot) {
       dot.setAttribute(
         'data-ready',
         String(Boolean(navigator.serviceWorker?.controller && this.state.cachedThemes.length > 0)),
+      );
+    }
+  }
+
+  private async checkForUpdate(): Promise<void> {
+    if (!navigator.serviceWorker?.controller) {
+      this.setStatus('需要 Service Worker');
+      return;
+    }
+
+    this.setStatus('正在检查更新…');
+    try {
+      const result = await request<{ ok: boolean; error?: string }>(
+        'CHECK_UPDATE',
+        {},
+        15_000,
+      );
+      if (!result.ok) {
+        this.updateStatus(`检查失败：${result.error ?? 'unknown error'}`);
+        return;
+      }
+
+      await this.refresh();
+      this.updateStatus(
+        this.state?.updateReady ? '有新内容，刷新后生效' : '已是最新',
+      );
+    } catch (error) {
+      this.updateStatus(
+        `检查失败：${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

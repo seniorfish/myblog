@@ -65,6 +65,20 @@ try {
   );
   console.log('service worker is controlling the page; dock is ready');
 
+  const dockButtons = await page.evaluate(() => {
+    const dock = document.querySelector('sys-theme-dock');
+    const shadow = dock?.shadowRoot;
+    return shadow
+      ? [...shadow.querySelectorAll('button')].map(
+          (button) => button.textContent?.trim() ?? '',
+        )
+      : [];
+  });
+  console.log(`dock buttons: ${dockButtons.join(' | ')}`);
+  if (!dockButtons.some((label) => label.includes('检查'))) {
+    throw new Error('theme dock is missing the update check button');
+  }
+
   const initialUrl = page.url();
   await page.evaluate(() => {
     const dock = document.querySelector('sys-theme-dock');

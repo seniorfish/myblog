@@ -5,6 +5,9 @@
  * serves navigations and same-origin assets from the active theme's VFS.
  */
 
+declare const __SW_CHECK_INTERVAL_MS__: number;
+declare const __SW_BUILD__: string;
+
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const DB_NAME = 'myblog-sw';
@@ -13,7 +16,8 @@ const STORE = 'meta';
 const STATE_KEY = 'state';
 const VFS_PREFIX = 'myblog-vfs-v1:';
 const MEDIA_CACHE = 'myblog-media-v1';
-const CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const CHECK_INTERVAL_MS = __SW_CHECK_INTERVAL_MS__;
+const SW_BUILD = __SW_BUILD__;
 
 interface ManifestTheme {
   id: string;
@@ -372,12 +376,12 @@ async function notify(message: unknown): Promise<void> {
   for (const client of clients) client.postMessage(message);
 }
 
-async function maybeCheckForUpdate(): Promise<void> {
+async function checkForUpdate(force = false): Promise<void> {
   const state = await readState();
   if (!state?.manifest) return;
 
   const now = Date.now();
-  if (now - state.lastCheckAt < CHECK_INTERVAL_MS) return;
+  if (!force && now - state.lastCheckAt < CHECK_INTERVAL_MS) return;
 
   await writeState({ ...state, lastCheckAt: now });
 
@@ -408,6 +412,10 @@ async function maybeCheckForUpdate(): Promise<void> {
   } catch (error) {
     console.warn('[sw] update check failed', error);
   }
+}
+
+async function maybeCheckForUpdate(): Promise<void> {
+  await checkForUpdate(false);
 }
 
 async function selectTheme(themeId: string): Promise<{ ok: boolean; error?: string }> {
@@ -481,6 +489,9 @@ async function getState(): Promise<StateResponse> {
 sw.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
+      console.info(
+        `[sw] build ${SW_BUILD}; update check interval ${CHECK_INTERVAL_MS}ms`,
+      );
       try {
         await initialize();
       } catch (error) {
@@ -551,7 +562,7 @@ sw.addEventListener('message', (event) => {
 
   if (data.type === 'CHECK_UPDATE') {
     event.waitUntil(
-      maybeCheckForUpdate()
+      checkForUpdate(true)
         .then(() => respond({ ok: true }))
         .catch((error) => respond({ ok: false, error: String(error) })),
     );
