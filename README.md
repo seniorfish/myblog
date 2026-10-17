@@ -54,7 +54,9 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 - 文章索引在 `/archive`，页头有“索引”链接。
 - 首页节点不生成 `/n/{id}` 详情页，但仍保留 raw/proof 存证产物。
 
-## 开发期 Service Worker 更新
+## Service Worker 更新
+
+### 开发期
 
 - 本地 `npm run build:all` 默认把内容更新检查间隔设为 **1000ms**；CI 设为 **30 分钟**。
 - 如需覆盖：
@@ -66,8 +68,19 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 
 - 每次本地构建默认生成新的 `SW_BUILD_ID`（时间戳），`sw.js` 字节会变化，浏览器下次加载会安装新 worker；CI 使用 commit SHA。
 - 打开主题 dock，点“检查”可强制立即检查 `manifest.json`；有新内容时会出现“刷新”。
-- 如果浏览器仍然停留在旧 SW：DevTools → Application → Service Workers → **Update** 或 **Unregister**，然后硬刷新；或清除该站点的站点数据。
 - 控制台会打印 `[sw] build ...; update check interval ...ms`，可据此确认版本与间隔。
+
+### 生产环境
+
+访客**不需要**手动卸载 Service Worker：
+
+- 每次页面加载或标签页重新可见时，`sys.js` 会调用 `registration.update()` 检查 `sw.js`，并向 worker 发送一个遵守 TTL 的 `SOFT_CHECK`。
+- 新 `sw.js` 使用 `skipWaiting()` + `clients.claim()`；如果构建 release 变了，dock 会显示“有新内容，刷新后生效”。访客点刷新或下一次导航即可。
+- 内容更新检查在生产是 30 分钟惰性节流；页面重新可见会触发 `SOFT_CHECK`，但仍受 30 分钟 TTL 限制。
+- 如果标签页一直开着、既不导航也不重新可见，可能不会立刻看到更新；下次访问/刷新会拿到最新版本。
+- 极端情况下（浏览器或代理缓存异常）仍可在 DevTools 里 Update/Unregister，但这只是排障手段，不是正常访客流程。
+
+CI 每次部署都会改变 `SW_BUILD_ID`（commit SHA），因此 `sw.js` 字节会变；即使内容 release 没变，新 worker 也会被浏览器发现并接管。
 
 ## 主题博物馆
 

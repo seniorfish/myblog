@@ -227,7 +227,10 @@ async function initialize(): Promise<void> {
     previousReleaseId: previous?.activeReleaseId,
     manifest,
     lastCheckAt: Date.now(),
-    updateReady: false,
+    updateReady: Boolean(
+      previous?.activeReleaseId &&
+        previous.activeReleaseId !== manifest.releaseId,
+    ),
   };
 
   await writeState(state);
@@ -297,6 +300,11 @@ async function handleNavigation(request: Request): Promise<Response> {
 
   if (state?.pendingReleaseId) {
     state = await promotePending(state);
+  } else if (state?.updateReady) {
+    // The new worker already made this release active. The next navigation
+    // (for example the dock's refresh button) consumes the notice.
+    state = { ...state, updateReady: false };
+    await writeState(state);
   }
 
   if (state?.activeReleaseId) {
@@ -563,6 +571,15 @@ sw.addEventListener('message', (event) => {
   if (data.type === 'CHECK_UPDATE') {
     event.waitUntil(
       checkForUpdate(true)
+        .then(() => respond({ ok: true }))
+        .catch((error) => respond({ ok: false, error: String(error) })),
+    );
+    return;
+  }
+
+  if (data.type === 'SOFT_CHECK') {
+    event.waitUntil(
+      checkForUpdate(false)
         .then(() => respond({ ok: true }))
         .catch((error) => respond({ ok: false, error: String(error) })),
     );

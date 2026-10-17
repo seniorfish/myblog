@@ -487,13 +487,52 @@ class ThemeDock extends HTMLElement {
   }
 }
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker
-    .register('/sw.js', { scope: '/', updateViaCache: 'none' })
-    .catch((error) => {
-      console.warn('[sys] service worker registration failed', error);
+/**
+ * Register the worker and keep it fresh without asking visitors to do
+ * anything. `registration.update()` re-checks sw.js; SOFT_CHECK lets the
+ * worker fetch a new manifest, but still respects its own TTL.
+ */
+async function setupUpdates(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
     });
+
+    const softCheck = async (): Promise<void> => {
+      try {
+        await registration.update();
+      } catch {
+        // The network may be offline; the worker will retry later.
+      }
+
+      if (!navigator.serviceWorker.controller) return;
+      try {
+        await request('SOFT_CHECK', {}, 10_000);
+      } catch {
+        // The worker may be activating; the next visibility change retries.
+      }
+    };
+
+    void softCheck();
+
+    let lastVisibilityCheck = 0;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+
+      const now = Date.now();
+      if (now - lastVisibilityCheck < 5 * 60_000) return;
+      lastVisibilityCheck = now;
+      void softCheck();
+    });
+  } catch (error) {
+    console.warn('[sys] service worker registration failed', error);
+  }
 }
+
+void setupUpdates();
 
 if (!customElements.get('sys-theme-dock')) {
   customElements.define('sys-theme-dock', ThemeDock);

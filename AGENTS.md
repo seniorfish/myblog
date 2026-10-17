@@ -27,7 +27,7 @@ npm run typecheck      # 主程序 + Service Worker 类型检查
 npm run prepare-theme -- default
 ```
 
-SW 更新间隔：本地 `build:all` 默认 1000ms，CI/生产 30 分钟；用 `SW_CHECK_INTERVAL_MS` 覆盖。`SW_BUILD_ID` 默认时间戳，CI 用 commit SHA。若浏览器仍停留在旧 SW，用 DevTools → Application → Service Workers → Update/Unregister，或在 dock 点“检查”。
+SW 更新间隔：本地 `build:all` 默认 1000ms，CI/生产 30 分钟；用 `SW_CHECK_INTERVAL_MS` 覆盖。`SW_BUILD_ID` 默认时间戳，CI 用 commit SHA。生产更新不依赖访客手动卸载：`sys.js` 在页面加载/重新可见时 `registration.update()` + `SOFT_CHECK`，新 worker `skipWaiting`/`clients.claim`；release 变化时 dock 提示刷新。排障时才用 DevTools Update/Unregister。
 
 ## 目录与修改边界
 

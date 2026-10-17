@@ -192,6 +192,7 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - 主题切换：`SET_THEME` → 拉取/校验/写入目标 VFS → 写 `activeThemeId` → ACK；页面 reload，URL 不变。
 - 更新检查：导航/可见时惰性执行，先写 `lastCheckAt` 防抖；间隔由构建期 `__SW_CHECK_INTERVAL_MS__` 注入——本地默认 **1000ms**，CI/生产 **30 分钟**，可用 `SW_CHECK_INTERVAL_MS` 覆盖。dock 的“检查”按钮通过 `CHECK_UPDATE` 强制忽略 TTL。`releaseId` 变化时缓存新 VFS，设置 pending，发 `UPDATE_READY`；下一次导航自动 promote。
 - `sw.js` 包含 `__SW_BUILD__` 构建标记：本地默认时间戳，CI 用 commit SHA；确保每次构建的 worker 字节变化，浏览器会安装新 worker。
+- 生产自动更新：页面加载/重新可见时调用 `registration.update()` 并发送 `SOFT_CHECK`（尊重 TTL）；新 worker 用 `skipWaiting`/`clients.claim` 接管。`initialize` 发现 release 变化时设置 `updateReady`，`handleNavigation` 在首次导航消费后清除；dock 据此提示“刷新”。访客无需手动卸载 SW。
 - 离线：文本资源来自 VFS；R2 图片需访问过才有缓存（M3）。
 
 ### 6.6 本地验证
