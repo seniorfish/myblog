@@ -1,0 +1,98 @@
+---
+import type { ContentNode, SiteMeta } from '../generated/contract';
+
+interface Props {
+  node: ContentNode;
+  site: SiteMeta;
+}
+
+const { node, site } = Astro.props;
+const rule = site.ui?.contentDisplay?.[node.primaryTag];
+const mode = rule?.mode ?? 'excerpt';
+const maxChars = rule?.maxChars ?? 400;
+const showFull =
+  mode === 'full' || (mode === 'full-if-short' && node.plainTextLength <= maxChars);
+const isBookmark = node.primaryTag === '收藏';
+const titleHref = isBookmark && node.externalUrl ? node.externalUrl : node.url;
+const titleTarget = isBookmark && node.externalUrl ? '_blank' : undefined;
+const showTitle =
+  Boolean(node.title) ||
+  (node.primaryTag !== '闪念' && !showFull) ||
+  isBookmark;
+const titleText = node.title ?? node.displayTitle;
+const externalHost = (() => {
+  if (!node.externalUrl) return undefined;
+  try {
+    return new URL(node.externalUrl).hostname;
+  } catch {
+    return undefined;
+  }
+})();
+---
+
+<div
+  class="node-wrap"
+  data-type={node.primaryTag}
+  data-tags={node.rawTags}
+  data-filter-item
+>
+  {
+    node.parent && (
+      <div class="node-context">
+        ╭── 继承自{' '}
+        <a href={node.parent.url}>
+          [{node.parent.primaryTag}] {node.parent.displayTitle}
+        </a>
+      </div>
+    )
+  }
+
+  <div class="node">
+    <a
+      class="node-date"
+      href={node.url}
+      datetime={node.displayDate.iso}
+      aria-label={`打开 ${node.displayTitle}`}
+    >
+      {node.displayDate.monthDay}
+    </a>
+
+    <div class="node-body">
+      {
+        showTitle && (
+          <a
+            class="node-title"
+            href={titleHref}
+            target={titleTarget}
+            rel={titleTarget ? 'noopener noreferrer' : undefined}
+          >
+            {titleText}
+          </a>
+        )
+      }
+
+      {
+        showFull && mode !== 'link' ? (
+          <div class="node-text" set:html={node.html} />
+        ) : (
+          node.excerpt &&
+          mode !== 'link' && <p class="node-excerpt">{node.excerpt}</p>
+        )
+      }
+
+      {
+        mode === 'link' && node.externalUrl && (
+          <p class="node-excerpt">{node.externalUrl}</p>
+        )
+      }
+
+      <div class="node-meta">
+        <span class="node-tag">{node.primaryTag}</span>
+        {node.secondaryTags.map((tag) => <span class="node-tag">#{tag}</span>)}
+        <span>{node.readingTime} min</span>
+        {externalHost && <span class="node-tag">{externalHost}</span>}
+        <a class="node-permalink" href={node.url}>详情</a>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,78 @@
+---
+interface TagCount {
+  name: string;
+  count: number;
+}
+
+interface Props {
+  tags: TagCount[];
+  total: number;
+}
+
+const { tags, total } = Astro.props;
+---
+
+<div class="tag-filter" role="group" aria-label="按标签筛选">
+  <button type="button" data-tag="全部" aria-pressed="true">
+    全部 <span class="tag-count">{total}</span>
+  </button>
+  {
+    tags.map((tag) => (
+      <button type="button" data-tag={tag.name} aria-pressed="false">
+        {tag.name} <span class="tag-count">{tag.count}</span>
+      </button>
+    ))
+  }
+</div>
+
+<script is:inline>
+  (() => {
+    const buttons = Array.from(document.querySelectorAll('[data-tag]'));
+    const items = Array.from(document.querySelectorAll('[data-filter-item]'));
+    const groups = Array.from(document.querySelectorAll('[data-year-group]'));
+    if (buttons.length === 0) return;
+
+    const params = new URLSearchParams(location.search);
+    let selected = params.get('tag') ?? '全部';
+    if (!buttons.some((button) => button.dataset.tag === selected)) {
+      selected = '全部';
+    }
+
+    const apply = (tag, updateUrl) => {
+      for (const item of items) {
+        const tags = (item.dataset.tags ?? '').split(/\s+/).filter(Boolean);
+        item.hidden = tag !== '全部' && !tags.includes(tag);
+      }
+
+      for (const group of groups) {
+        const visible = Array.from(group.querySelectorAll('[data-filter-item]')).some(
+          (item) => !item.hidden,
+        );
+        group.hidden = !visible;
+      }
+
+      for (const button of buttons) {
+        button.setAttribute('aria-pressed', String(button.dataset.tag === tag));
+      }
+
+      if (updateUrl) {
+        const url = new URL(location.href);
+        if (tag === '全部') {
+          url.searchParams.delete('tag');
+        } else {
+          url.searchParams.set('tag', tag);
+        }
+        history.replaceState(null, '', url);
+      }
+    };
+
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        selected = button.dataset.tag;
+        apply(selected, true);
+      });
+    }
+
+    apply(selected, false);
+  })();
+</script>

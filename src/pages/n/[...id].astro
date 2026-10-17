@@ -1,0 +1,63 @@
+---
+import siteDataJson from '../../generated/site-data.json';
+import type { ContentNode, SiteData } from '../../generated/contract';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ChildrenList from '../../components/ChildrenList.astro';
+import NodeMeta from '../../components/NodeMeta.astro';
+import Revisions from '../../components/Revisions.astro';
+
+interface Props {
+  node: ContentNode;
+}
+
+const data = siteDataJson as SiteData;
+
+export function getStaticPaths() {
+  return data.nodes.map((node) => ({
+    params: { id: node.id },
+    props: { node },
+  }));
+}
+
+const { node } = Astro.props;
+const pageTitle = node.title ?? node.displayTitle;
+const description = node.description ?? node.excerpt;
+---
+
+<BaseLayout site={data.site} title={pageTitle} description={description} canonicalPath={node.url}>
+  <article class="node-detail" data-type={node.primaryTag} data-tags={node.rawTags}>
+    <nav class="back"><a href="/">← 返回时间流</a></nav>
+
+    {
+      node.parent && (
+        <aside class="context-card">
+          <span class="context-label">前情提要</span>
+          <a href={node.parent.url}>
+            [{node.parent.primaryTag}] {node.parent.displayTitle}
+          </a>
+        </aside>
+      )
+    }
+
+    <header>
+      {node.title ? <h1>{node.title}</h1> : <h1 class="sr-only">{node.displayTitle}</h1>}
+      <NodeMeta node={node} />
+    </header>
+
+    {
+      node.externalUrl && (
+        <p class="external-link">
+          <a href={node.externalUrl} target="_blank" rel="noopener noreferrer">
+            {node.externalUrl} ↗
+          </a>
+        </p>
+      )
+    }
+
+    {node.html && <div class="prose" set:html={node.html} />}
+
+    {node.children.length > 0 && <ChildrenList node={node} />}
+
+    <Revisions node={node} site={data.site} />
+  </article>
+</BaseLayout>
