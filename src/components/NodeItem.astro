@@ -48,13 +48,8 @@ const externalHost = (() => {
   }
 
   <div class="node">
-    <a
-      class="node-date"
-      href={node.url}
-      datetime={node.displayDate.iso}
-      aria-label={`打开 ${node.displayTitle}`}
-    >
-      {node.displayDate.monthDay}
+    <a class="node-date" href={node.url} aria-label={`打开 ${node.displayTitle}`}>
+      <time datetime={node.displayDate.iso}>{node.displayDate.monthDay}</time>
     </a>
 
     <div class="node-body">
