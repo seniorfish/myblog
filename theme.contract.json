@@ -1,0 +1,9 @@
+{
+  "id": "terminal",
+  "displayName": "Terminal",
+  "model": "Claude (reference theme)",
+  "description": "单色终端风格：等宽字体、虚线分隔、绿色强调。",
+  "author": "seniorfish",
+  "isDefault": false,
+  "version": "1.0.0"
+}

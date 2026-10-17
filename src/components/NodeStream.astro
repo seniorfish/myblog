@@ -1,0 +1,31 @@
+---
+import type { ContentNode, SiteMeta } from '../generated/contract';
+import NodeItem from './NodeItem.astro';
+
+interface Props {
+  nodes: ContentNode[];
+  site: SiteMeta;
+}
+
+const { nodes, site } = Astro.props;
+const groups = new Map<string, ContentNode[]>();
+
+for (const node of nodes) {
+  const list = groups.get(node.displayDate.year) ?? [];
+  list.push(node);
+  groups.set(node.displayDate.year, list);
+}
+---
+
+<div class="stream">
+  {
+    [...groups.entries()].map(([year, items]) => (
+      <section class="year-group" data-year-group>
+        <h2 class="year-label">{year}</h2>
+        {items.map((node) => (
+          <NodeItem node={node} site={site} />
+        ))}
+      </section>
+    ))
+  }
+</div>

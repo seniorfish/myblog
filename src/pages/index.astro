@@ -1,0 +1,35 @@
+---
+import siteDataJson from '../generated/site-data.json';
+import type { SiteData } from '../generated/contract';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import NodeStream from '../components/NodeStream.astro';
+import TagFilter from '../components/TagFilter.astro';
+
+const data = siteDataJson as SiteData;
+const counts = new Map<string, number>();
+
+for (const node of data.nodes) {
+  for (const tag of [node.primaryTag, ...node.secondaryTags]) {
+    counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+}
+
+const tags = [...counts.entries()]
+  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'))
+  .map(([name, count]) => ({ name, count }));
+---
+
+<BaseLayout site={data.site} canonicalPath="/">
+  <p class="intro">按时间混排的节点流。标签不是栏目，只是筛选器。</p>
+
+  {
+    data.nodes.length > 0 ? (
+      <>
+        <TagFilter tags={tags} total={data.nodes.length} />
+        <NodeStream nodes={data.nodes} site={data.site} />
+      </>
+    ) : (
+      <p class="intro">还没有内容。</p>
+    )
+  }
+</BaseLayout>

@@ -1,0 +1,107 @@
+---
+import type { ContentNode, SiteMeta } from '../generated/contract';
+
+interface Props {
+  node: ContentNode;
+  site: SiteMeta;
+}
+
+const { node, site } = Astro.props;
+const latest = node.revisions[0];
+const hasAnyAnchor = node.revisions.some((revision) => revision.verifiedAt !== null);
+const status = node.isVerified
+  ? '已锚定'
+  : hasAnyAnchor
+    ? '当前版本待锚定'
+    : '尚无链上锚定记录';
+
+const formatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: site.timezone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+const formatTime = (timestamp: number | null | undefined): string =>
+  timestamp ? formatter.format(new Date(timestamp * 1000)) : '—';
+
+const statusDetail = node.isVerified
+  ? `锚定于 ${formatTime(latest?.verifiedAt)}${
+      latest?.anchor ? ` · block #${latest.anchor.blockNumber}` : ''
+    }`
+  : hasAnyAnchor
+    ? `当前版本待锚定 · 上次锚定于 ${formatTime(node.updatedAt)}`
+    : 'M1 未启用链上存证；时间来自 Git 提交。';
+
+const lineClass = (line: string): string => {
+  if (line.startsWith('+') && !line.startsWith('+++')) return 'diff-add';
+  if (line.startsWith('-') && !line.startsWith('---')) return 'diff-del';
+  return '';
+};
+---
+
+<details class="revisions">
+  <summary>
+    修订与存证 · {node.revisions.length} 次提交 · {status}
+  </summary>
+
+  <p class="revision-status">{statusDetail}</p>
+  {node.isDirty && <p class="revision-status">当前工作区有未提交修改。</p>}
+
+  <ol class="revision-list">
+    {
+      node.revisions.map((revision, index) => (
+        <li>
+          <div class="revision-head">
+            <span class="revision-index">
+              {index === 0 ? '当前版本' : `第 ${node.revisions.length - index} 次修改`}
+            </span>
+            <code>{revision.shortCommit || '未提交'}</code>
+            <time datetime={new Date(revision.gitTimestamp * 1000).toISOString()}>
+              {formatTime(revision.gitTimestamp)}
+            </time>
+          </div>
+
+          <p class="revision-message">{revision.message}</p>
+
+          {revision.verifiedAt ? (
+            <p class="revision-anchor">
+              锚定于 {formatTime(revision.verifiedAt)}
+              {revision.anchor?.explorerUrl && (
+                <>
+                  {' · '}
+                  <a
+                    href={revision.anchor.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    交易 {revision.anchor.txHash.slice(0, 10)}… ↗
+                  </a>
+                </>
+              )}
+            </p>
+          ) : (
+            <p class="revision-anchor">未锚定</p>
+          )}
+
+          {revision.diff && (
+            <pre class="revision-diff">
+              <code>
+                {revision.diff.split('\n').map((line) => (
+                  <span class={lineClass(line)}>
+                    {line}
+                    {'\n'}
+                  </span>
+                ))}
+              </code>
+            </pre>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</details>

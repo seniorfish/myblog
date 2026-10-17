@@ -1,0 +1,29 @@
+---
+import type { ContentNode } from '../generated/contract';
+
+interface Props {
+  node: ContentNode;
+}
+
+const { node } = Astro.props;
+
+const formatDate = (timestamp: number | null): string =>
+  timestamp ? new Date(timestamp * 1000).toISOString().slice(0, 10) : '—';
+---
+
+<section class="children">
+  <h2>后续进展</h2>
+  <ul>
+    {
+      node.children.map((child) => (
+        <li>
+          <a href={child.url}>
+            <span class="child-date">{formatDate(child.timestamp)}</span>
+            <span class="child-tag">[{child.primaryTag}]</span>
+            <span class="child-title">{child.displayTitle}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</section>

@@ -1,0 +1,11 @@
+node_modules/
+.astro/
+dist/
+
+# Injected by scripts/prepare-theme.ts
+package.json
+package-lock.json
+astro.config.mjs
+tsconfig.json
+src/env.d.ts
+src/generated/
