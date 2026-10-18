@@ -2,6 +2,30 @@
 
 所有内容都是 `content/` 下的 `.md` 文件。文件名（去掉 `.md`）就是节点 id，详情页 URL 为 `/n/{id}`。
 
+## 推荐工作流
+
+```powershell
+npm run blog      # 检查工作区；干净时复制模板并打开编辑器
+npm run ai        # 选择文件 → frontmatter / 语言优化
+npm run blog      # 校验并提交
+```
+
+- `npm run blog` 负责 Git 与文件状态；它不会静默调用 AI。
+- `npm run ai` 只处理单个文件，生成建议或改写；它不会执行 `git add/commit/push`。
+- `content/new-blog.md` 是临时模板 id，不能提交；`npm run blog` 会要求改成正式 slug。
+- 模板文件在 `templates/new-blog.md`，里面的 `<!-- new-blog-template -->` 标记要在完成正文后删除。
+- AI 使用 `DEEPSEEK_API_KEY`，只在写作时调用；构建和 CI 不调用模型。
+
+常用非交互命令：
+
+```powershell
+npm run blog -- check --json
+npm run blog -- save content/foo.md --json
+npm run ai -- frontmatter content/foo.md --fields tags,description --json
+npm run ai -- frontmatter content/foo.md --fields tags,description --write
+npm run ai -- language content/foo.md --mode proofread --output advice --json
+```
+
 ## Frontmatter
 
 ```yaml
@@ -27,6 +51,14 @@ draft: false
 | `draft` | 否 | `true` 时不进入构建产物 |
 
 **不要写日期。** `date`、`pubDate`、`createdAt`、`updatedAt` 等字段会让编译直接失败；时间由 Git 提交与链上锚定推导。
+
+AI 补全规则：
+
+- 默认只补缺失字段；已有内容不覆盖。
+- `tags` 是必填；AI 会优先复用已有 Tag。
+- `extends` 只给候选，写入前必须确认。
+- `description`、`title` 由正文推导，不编造事实。
+- `draft`、`aliases` 不由 AI 自动生成。
 
 ## 首页（主 Tag: 首页）
 

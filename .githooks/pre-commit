@@ -1,0 +1,3 @@
+#!/bin/sh
+# Deterministic content validation. AI is never called from a Git hook.
+exec npm run --silent blog -- check

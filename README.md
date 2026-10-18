@@ -6,6 +6,7 @@
 
 - M1：内容编译器、默认主题、本地开发与静态构建。
 - M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
+- 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件 frontmatter / 语言优化）。
 - M3（未实现）：Base Sepolia 链上锚定、R2 图床、Cloudflare Pages 部署。
 
 ## 快速开始
@@ -26,6 +27,54 @@ npm run dev
 npm run dev -- terminal
 ```
 
+## 写作工作流
+
+推荐使用两个命令，各自负责一层：
+
+- `npm run blog`：仓库级状态机。检查 Git、创建模板、校验、提交、推送。
+- `npm run ai`：文件级 AI 助手。补全 frontmatter、给语言建议或改写正文；不做 Git 操作。
+
+典型流程：
+
+```powershell
+npm run blog      # 干净工作区时复制模板并打开编辑器
+npm run ai        # 选择文件 → frontmatter → 勾选本轮字段
+npm run blog      # 校验并提交
+```
+
+也可以自由组合非交互子命令：
+
+```powershell
+npm run blog -- status --json
+npm run blog -- check --json
+npm run blog -- new --no-commit
+npm run blog -- save content/new-blog.md
+npm run blog -- pull
+npm run blog -- push --yes
+
+npm run ai -- frontmatter content/new-blog.md --fields tags,description --json
+npm run ai -- frontmatter content/new-blog.md --fields tags,description --write
+npm run ai -- language content/hello.md --mode proofread --output advice --json
+npm run ai -- language content/hello.md --mode concise --output rewrite --write
+```
+
+`npm run ai` 使用 `DEEPSEEK_API_KEY`，模型默认 `deepseek-flash`：
+
+```powershell
+$env:DEEPSEEK_API_KEY = '你的 key'
+$env:DEEPSEEK_MODEL = 'deepseek-flash'   # 可选
+```
+
+密钥只放环境变量，不进入仓库、`.env`、对话或构建产物。构建和 CI 都不调用 AI。
+
+模板在 `templates/new-blog.md`，`content/new-blog.md` 是保留的临时 id；提交前会要求改成正式 slug。
+
+可选安装内容校验钩子（只校验，不调用 AI）：
+
+```powershell
+npm run hooks:install
+```
+
 ## 构建与预览
 
 ```powershell
@@ -41,6 +90,9 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 
 | 命令 | 作用 |
 | --- | --- |
+| `npm run blog` | 交互式检查/创建/提交/推送内容 |
+| `npm run ai` | 交互式 frontmatter / 语言优化 |
+| `npm run hooks:install` | 安装内容校验 pre-commit 钩子 |
 | `npm run compile` | 只运行内容编译器 |
 | `npm run prepare-theme -- <id>` | 准备某个主题的 worktree 与依赖 |
 | `npm test` | Vitest 单元/集成测试 |
@@ -112,6 +164,11 @@ core/             编译器、契约、Git/锚定、VFS 纯逻辑
 host/             sys-theme-dock 宿主组件（TypeScript）
 sw/               Service Worker（TypeScript）
 scripts/          compile / prepare-theme / dev / build / build-all / serve / e2e
+scripts/blog/     npm run blog：仓库状态机与 Git 操作
+scripts/ai/       npm run ai：DeepSeek frontmatter / 语言建议
+scripts/shared/   两个 CLI 共享的解析、Git、diff、slug 与编辑器工具
+templates/        new-blog.md 模板（不参与编译）
+.githooks/        可选的内容校验 pre-commit 钩子
 theme-harness/    Astro + Tailwind 共享工具链（main）
 tests/            Vitest
 .worktrees/       theme/* 分支的本地 worktree（gitignore）

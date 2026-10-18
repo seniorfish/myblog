@@ -47,6 +47,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Validate content
+        run: npm run blog -- check --json
+
       - name: Build all themes and assemble dist
         run: npm run build:all
         env:

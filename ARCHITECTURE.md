@@ -222,7 +222,23 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - `npm run test:e2e` 依赖本机 Chrome，CI 只跑单元测试与 build:all 校验。
 - `sw.js`、`sys.js` 不参与 VFS 内容哈希；靠 `Cache-Control: no-cache` 让浏览器重新校验。
 
-## 9. 参考
+## 9. 内容工作流 CLI
+
+写作工具分成两个互不依赖的命令：
+
+| 命令 | 研究对象 | 负责 | 禁止 |
+| --- | --- | --- | --- |
+| `npm run blog` | 仓库 / Git / 文件 | 状态检查、模板、校验、commit、push、未来 anchor | 不改写正文语义 |
+| `npm run ai` | 单个 `.md` | frontmatter 建议、语言建议/改写、未来翻译 | 不执行 Git 写操作 |
+
+- `scripts/blog/state.ts` 采集 Git 与内容状态；`blocking` 直接阻止，`decision` 交给交互层，安全机械问题由 `scripts/shared/content-file.ts` 修复。
+- `scripts/blog/cli.ts` 用 `@clack/prompts` 做交互、`citty` 做子命令。非交互模式始终提供 `--json`，遇到需要决策的情况返回非零退出码而不是猜测。
+- `scripts/ai/` 用 DeepSeek OpenAI 兼容端点：`deepseek-flash`、显式 `thinking: disabled`、`response_format: json_object`。1M 上下文只用于紧凑的节点索引 + 当前正文，不发送全站原文。
+- AI 提案必须经用户确认；`--write` 才落盘。写入前校验文件哈希，写入后跑 `validateContent`，新增错误会回滚。
+- `templates/new-blog.md` 不参与编译；`content/new-blog.md` 是保留 id，提交前自动改成 slug。
+- 构建与 CI 不读取 `DEEPSEEK_API_KEY`，也不调用模型。
+
+## 10. 参考
 
 - Astro / Tailwind / Shiki / Zod 官方文档。
 - Foundry `cast` 与 JSON-RPC 文档（本机离线资料库）。

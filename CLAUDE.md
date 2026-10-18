@@ -10,4 +10,6 @@
 - 不要修改 `src/generated/`、`build/`、`dist/`、`.worktrees/`。
 - 私钥、助记词、keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。
 - 修改 `core/contract.ts` 前，确认所有主题仍能构建。
-- 构建/测试命令：`npm test`、`npm run typecheck`、`npm run build`。
+- 写作工作流：`npm run blog` 管 Git/文件；`npm run ai` 只管单文件 AI 建议。不要给 `ai` 加 Git 写操作。
+- `DEEPSEEK_API_KEY` 只从环境变量读取；AI 只在写作时调用，构建和 CI 不调用。
+- 构建/测试命令：`npm test`、`npm run typecheck`、`npm run build`、`npm run blog -- check --json`。
