@@ -160,17 +160,17 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
   );
 
   const blockers: string[] = [];
-  if (!repo) blockers.push(`Not a Git repository: ${root}`);
-  if (repo && git.detached) blockers.push('HEAD is detached; switch back to main.');
+  if (!repo) blockers.push(`不是 Git 仓库：${root}`);
+  if (repo && git.detached) blockers.push('HEAD 处于 detached 状态；请切回 main。');
   if (repo && !git.detached && git.branch !== 'main') {
-    blockers.push(`Current branch is "${git.branch}"; content is committed on main only.`);
+    blockers.push(`当前分支是 "${git.branch}"；内容只能在 main 上提交。`);
   }
-  if (git.operation) blockers.push(`A Git ${git.operation} is in progress.`);
+  if (git.operation) blockers.push(`Git ${git.operation} 正在进行中。`);
   if (git.status.some((entry) => entry.unmerged)) {
-    blockers.push('There are unresolved merge conflicts.');
+    blockers.push('还有未解决的合并冲突。');
   }
   if (git.mergeCommits.length > 0) {
-    blockers.push('Main contains merge commits; squash/rebase to keep history linear.');
+    blockers.push('main 历史里有 merge commit；请先 squash/rebase 保持线性历史。');
   }
 
   for (const issue of globalErrors) {
@@ -179,24 +179,24 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
 
   for (const candidate of candidatesByPath.values()) {
     if (candidate.kind === 'renamed') {
-      blockers.push(`${candidate.path}: renaming content changes its id. Use a new file with aliases instead.`);
+      blockers.push(`${candidate.path}：重命名会改变节点 id，请用新文件 + aliases。`);
     }
     if (candidate.kind === 'deleted') {
-      blockers.push(`${candidate.path}: deleting content is destructive and needs a manual review.`);
+      blockers.push(`${candidate.path}：删除内容有破坏性，需要手动确认。`);
     }
     if (candidate.id === 'new-blog' && (candidate.staged || candidate.kind !== 'untracked')) {
-      blockers.push(`${candidate.path}: new-blog.md is a template id and cannot be committed.`);
+      blockers.push(`${candidate.path}：new-blog.md 是模板保留 id，不能提交。`);
     }
   }
 
   const notes: string[] = [];
   const nonContentChanges = git.status.filter((entry) => !isContentMarkdown(entry.path));
   if (nonContentChanges.length > 0) {
-    notes.push(`${nonContentChanges.length} non-content change(s) will be left untouched.`);
+    notes.push(`有 ${nonContentChanges.length} 个非内容改动，本次不会处理。`);
   }
-  if (git.remotes.length === 0) notes.push('No Git remote configured; push is unavailable.');
-  if (git.behind > 0) notes.push(`Branch is behind the upstream by ${git.behind} commit(s).`);
-  if (git.ahead > 0) notes.push(`Branch is ahead of the upstream by ${git.ahead} commit(s).`);
+  if (git.remotes.length === 0) notes.push('没有配置 Git 远端；push 不可用。');
+  if (git.behind > 0) notes.push(`分支落后远端 ${git.behind} 个提交。`);
+  if (git.ahead > 0) notes.push(`分支领先远端 ${git.ahead} 个提交。`);
 
   const candidates = [...candidatesByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
   const candidateErrors = candidates.some((candidate) => candidate.errors.length > 0);
