@@ -25,7 +25,7 @@ describe('parseFrontmatter', () => {
 
   it('rejects unknown fields', () => {
     expect(() => parseFrontmatter({ tags: '文章', titel: 'typo' })).toThrowError(
-      /Unknown frontmatter/,
+      /Unknown metadata/,
     );
   });
 

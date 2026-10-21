@@ -6,7 +6,7 @@
 
 - M1：内容编译器、默认主题、本地开发与静态构建。
 - M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
-- 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件 frontmatter / 语言优化）。
+- 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件元数据 / 语言优化）。
 - M3（未实现）：Base Sepolia 链上锚定、R2 图床、Cloudflare Pages 部署。
 
 ## 快速开始
@@ -32,13 +32,13 @@ npm run dev -- terminal
 推荐使用两个命令，各自负责一层：
 
 - `npm run blog`：仓库级状态机。检查 Git、创建模板、校验、提交、推送。
-- `npm run ai`：文件级 AI 助手。补全 frontmatter、给语言建议或改写正文；不做 Git 操作。
+- `npm run ai`：文件级 AI 助手。补全 `*.meta.yml`、给语言建议或改写正文；不做 Git 操作。
 
 典型流程：
 
 ```powershell
 npm run blog      # 干净工作区时复制模板并打开编辑器
-npm run ai        # 选择文件 → frontmatter → 勾选本轮字段
+npm run ai        # 选择文件 → 元数据 → 勾选本轮字段
 npm run blog      # 校验并提交
 ```
 
@@ -91,9 +91,10 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 | 命令 | 作用 |
 | --- | --- |
 | `npm run blog` | 交互式检查/创建/提交/推送内容 |
-| `npm run ai` | 交互式 frontmatter / 语言优化 |
+| `npm run ai` | 交互式元数据 / 语言优化 |
 | `npm run hooks:install` | 安装内容校验 pre-commit 钩子 |
 | `npm run compile` | 只运行内容编译器 |
+| `npm run migrate:meta` | 一次性迁移：把旧 frontmatter 拆到 `.meta.yml`（默认 dry run） |
 | `npm run prepare-theme -- <id>` | 准备某个主题的 worktree 与依赖 |
 | `npm test` | Vitest 单元/集成测试 |
 | `npm run typecheck` | 主程序 + Service Worker 类型检查 |
@@ -151,7 +152,7 @@ manifest.json                        # releaseId + 主题元数据
 sw.js                                # Service Worker
 _sys/sys.js                          # 主题 dock + SW 注册
 _headers                             # Cloudflare Pages 缓存策略
-raw/ proof/ search-index.json        # 共享文本产物
+raw/ proof/ search-index.json        # 共享文本产物（raw 为纯正文）
 ```
 
 浏览器首次加载默认主题；Service Worker 激活后，右下角出现 `Themes` 胶囊。切换主题时 URL 不变，SW 从本地 VFS 返回目标主题的 HTML/CSS/JS。已缓存过的站内导航与断网导航都不需要网络。
@@ -159,15 +160,15 @@ raw/ proof/ search-index.json        # 共享文本产物
 ## 仓库结构
 
 ```text
-content/          所有 .md 内容
+content/          正文 .md + 元数据 .meta.yml
 core/             编译器、契约、Git/锚定、VFS 纯逻辑
 host/             sys-theme-dock 宿主组件（TypeScript）
 sw/               Service Worker（TypeScript）
 scripts/          compile / prepare-theme / dev / build / build-all / serve / e2e
 scripts/blog/     npm run blog：仓库状态机与 Git 操作
-scripts/ai/       npm run ai：DeepSeek frontmatter / 语言建议
+scripts/ai/       npm run ai：DeepSeek 元数据 / 语言建议
 scripts/shared/   两个 CLI 共享的解析、Git、diff、slug 与编辑器工具
-templates/        new-blog.md 模板（不参与编译）
+templates/        new-blog.md + new-blog.meta.yml 模板（不参与编译）
 .githooks/        可选的内容校验 pre-commit 钩子
 theme-harness/    Astro + Tailwind 共享工具链（main）
 tests/            Vitest
@@ -194,7 +195,7 @@ dist/             最终部署产物（gitignore）
 
 ## 内容与时间
 
-- 内容只写标准 Markdown，frontmatter 至少要有 `tags`。
+- 内容只写标准 Markdown；每篇正文旁边有一个同名 `.meta.yml`，至少要有 `tags`。
 - **不允许手写日期**。时间来自 Git 提交；链上锚定在 M3 接入后，以区块时间为权威。
 - 主 Tag 决定形态：`文章`、`想法`、`闪念`、`收藏`，也允许未来任意新 Tag；没有专门样式时自动回退。
 - 新进展通过 `extends` 新建节点，不直接改写旧文章。

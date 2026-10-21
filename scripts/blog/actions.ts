@@ -1,22 +1,39 @@
+import { existsSync } from 'node:fs';
+import { constants } from 'node:fs';
 import { copyFile, rename } from 'node:fs/promises';
 import path from 'node:path';
-import matter from 'gray-matter';
+import { metaRelPathFor, nodeIdFromPath, parseMetadataSource } from '../../core/metadata.ts';
 import {
   buildCommitMessage,
   displayTitle,
   primaryTagOf,
   type ChangeKind,
 } from '../shared/commit-message.ts';
-import { TEMPLATE_PATH, TEMPLATE_SOURCE } from '../shared/content-file.ts';
-import { commitPath, getFileAtHead, pushChanges } from '../shared/git-cli.ts';
+import {
+  TEMPLATE_META_SOURCE,
+  TEMPLATE_PATH,
+  TEMPLATE_SOURCE,
+} from '../shared/content-file.ts';
+import { commitPaths, getFileAtHead, pushChanges } from '../shared/git-cli.ts';
 import { uniqueSlug } from '../shared/slug.ts';
 import type { Candidate, BlogState } from './state.ts';
 
-export async function createTemplateFile(root: string, targetRel = TEMPLATE_PATH): Promise<string> {
-  const source = path.join(root, TEMPLATE_SOURCE);
-  const target = path.join(root, targetRel);
-  await copyFile(source, target, 1);
-  return targetRel;
+export async function createTemplateFile(
+  root: string,
+  targetRel = TEMPLATE_PATH,
+): Promise<string[]> {
+  const targetMeta = metaRelPathFor(targetRel);
+  await copyFile(
+    path.join(root, TEMPLATE_SOURCE),
+    path.join(root, targetRel),
+    constants.COPYFILE_EXCL,
+  );
+  await copyFile(
+    path.join(root, TEMPLATE_META_SOURCE),
+    path.join(root, targetMeta),
+    constants.COPYFILE_EXCL,
+  );
+  return [targetRel, targetMeta];
 }
 
 export async function renameTemplate(
@@ -34,15 +51,21 @@ export async function renameTemplate(
   const nextRel = `content/${slug}.md`;
   if (nextRel === candidate.path) return candidate.path;
 
+  const currentMeta = candidate.metaPath ?? metaRelPathFor(candidate.path);
+  const nextMeta = metaRelPathFor(nextRel);
+
   await rename(path.join(root, candidate.path), path.join(root, nextRel));
+  if (existsSync(path.join(root, currentMeta))) {
+    await rename(path.join(root, currentMeta), path.join(root, nextMeta));
+  }
   return nextRel;
 }
 
 function parseHeadData(root: string, relPath: string): Record<string, unknown> | null {
-  const raw = getFileAtHead(root, relPath);
+  const raw = getFileAtHead(root, metaRelPathFor(relPath));
   if (!raw) return null;
   try {
-    return matter(raw).data as Record<string, unknown>;
+    return parseMetadataSource(raw) as unknown as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -100,6 +123,7 @@ export function planCommit(state: BlogState, candidate: Candidate): CommitPlan {
 
 export interface CommitResult {
   path: string;
+  metaPath: string;
   id: string;
   message: string;
   commit: string;
@@ -120,18 +144,19 @@ export async function commitCandidate(
     throw new Error('Refusing to commit the reserved new-blog.md template id.');
   }
 
+  const metaPath = metaRelPathFor(relPath);
   const plan = planCommit(state, { ...candidate, path: relPath });
   const message = messageOverride?.trim() || plan.message;
-  const commit = commitPath(state.root, relPath, message);
+  const commit = commitPaths(state.root, [relPath, metaPath], message);
 
-  const id = relPath.replace(/^content\//u, '').replace(/\.md$/iu, '');
+  const id = nodeIdFromPath(relPath);
   const primaryTag = primaryTagOf(candidate.data ?? {});
   const url =
     primaryTag === state.config.homeTag
       ? '/'
       : `/n/${id.split('/').map((segment) => encodeURIComponent(segment)).join('/')}`;
 
-  return { path: relPath, id, message, commit, url };
+  return { path: relPath, metaPath, id, message, commit, url };
 }
 
 export function push(state: BlogState): string {

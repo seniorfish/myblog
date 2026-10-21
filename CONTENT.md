@@ -6,14 +6,14 @@
 
 ```powershell
 npm run blog      # 检查工作区；干净时复制模板并打开编辑器
-npm run ai        # 选择文件 → frontmatter / 语言优化
+npm run ai        # 选择文件 → 元数据 / 语言优化
 npm run blog      # 校验并提交
 ```
 
 - `npm run blog` 负责 Git 与文件状态；它不会静默调用 AI。
 - `npm run ai` 只处理单个文件，生成建议或改写；它不会执行 `git add/commit/push`。
-- `content/new-blog.md` 是临时模板 id，不能提交；`npm run blog` 会要求改成正式 slug。
-- 模板文件在 `templates/new-blog.md`，里面的 `<!-- new-blog-template -->` 标记要在完成正文后删除。
+- `content/new-blog.md` 是临时模板 id，不能提交；`npm run blog` 会要求改成正式 slug。正文与元数据会一起重命名。
+- 模板文件在 `templates/new-blog.md` 与 `templates/new-blog.meta.yml`；正文里的 `<!-- new-blog-template -->` 标记要在完成正文后删除。
 - AI 使用 `DEEPSEEK_API_KEY`，只在写作时调用；构建和 CI 不调用模型。
 
 常用非交互命令：
@@ -26,10 +26,15 @@ npm run ai -- frontmatter content/foo.md --fields tags,description --write
 npm run ai -- language content/foo.md --mode proofread --output advice --json
 ```
 
-## Frontmatter
+## 元数据（`*.meta.yml`）
+
+正文与元数据分开存放：
+
+- `content/foo.md`：**只放正文**，不允许 `---` frontmatter。
+- `content/foo.meta.yml`：元数据，至少要有 `tags`。
 
 ```yaml
----
+# content/foo.meta.yml
 tags: 文章 建站
 title: 标题
 description: 一句话摘要
@@ -37,7 +42,6 @@ extends: parent-id
 url: https://example.com
 aliases: [old-id]
 draft: false
----
 ```
 
 | 字段 | 必填 | 说明 |
@@ -50,10 +54,13 @@ draft: false
 | `aliases` | 否 | 旧 id，用于未来重定向与引用解析 |
 | `draft` | 否 | `true` 时不进入构建产物 |
 
+修改标签、标题、摘要都只改 `.meta.yml`。正文文件的字节不变，因此不会产生新的正文修订，也不会影响已有的正文存证。
+
 **不要写日期。** `date`、`pubDate`、`createdAt`、`updatedAt` 等字段会让编译直接失败；时间由 Git 提交与链上锚定推导。
 
 AI 补全规则：
 
+- AI 只写 `*.meta.yml`，不改正文。
 - 默认只补缺失字段；已有内容不覆盖。
 - `tags` 是必填；AI 会优先复用已有 Tag。
 - `extends` 只给候选，写入前必须确认。
@@ -69,12 +76,14 @@ AI 补全规则：
 - 首页页脚会自动带上该节点的“修订与存证”折叠框。
 
 ```yaml
----
+# content/home.meta.yml
 tags: 首页
 title: 你好，我是……
 description: 一句话介绍。
----
+```
 
+```markdown
+<!-- content/home.md -->
 你好，我是……
 ```
 
@@ -82,20 +91,22 @@ description: 一句话介绍。
 
 ## 四种主 Tag
 
+下面只展示各自的 `*.meta.yml`：
+
 ```yaml
-# 文章：长文，首页只显示摘要 + 链接
+# 文章：长文，首页只显示摘要 + 链接（content/article.meta.yml）
 tags: 文章 建站
 title: 构建面向 AI Agent 的个人博客
 
-# 想法：短卡片；正文不超过 400 字时首页直接展开
+# 想法：短卡片；正文不超过 400 字时首页直接展开（content/thought.meta.yml）
 tags: 想法 硬件 树莓派
 extends: pi-intro
 
-# 闪念：单行；首页整条内联
+# 闪念：单行；首页整条内联（content/flash.meta.yml）
 tags: 闪念 日常
 extends: pi-cooling-thought
 
-# 收藏：外链卡片
+# 收藏：外链卡片（content/bookmark.meta.yml）
 tags: 收藏 工具
 title: 树莓派官方 GPIO 速查表
 url: https://www.raspberrypi.com/documentation/computers/raspberry-pi.html
@@ -108,10 +119,13 @@ url: https://www.raspberrypi.com/documentation/computers/raspberry-pi.html
 编辑只用于勘误；新的体会新建一个节点，用 `extends` 指向旧节点：
 
 ```yaml
----
+# content/pi-cooling.meta.yml
 tags: 想法 硬件 树莓派
 extends: pi-intro
----
+```
+
+```markdown
+<!-- content/pi-cooling.md -->
 换了铜片散热之后，连续编译十分钟温度从 82 度降到 67 度。
 ```
 
@@ -122,7 +136,7 @@ extends: pi-intro
 - 在旧文章底部自动生成“后续进展”列表；
 - 在首页给新节点渲染“继承自《…》”的前情提要。
 
-**id 发布后不要改名。** 如果必须改，在 frontmatter 写 `aliases: [旧 id]`；未来会生成重定向。
+**id 发布后不要改名。** 如果必须改，在 `.meta.yml` 写 `aliases: [旧 id]`；未来会生成重定向。
 
 ## 草稿与未提交内容
 

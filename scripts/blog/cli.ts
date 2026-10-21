@@ -7,7 +7,8 @@ import { defineCommand, runMain } from 'citty';
 import { loadSiteConfig } from '../../core/config.ts';
 import type { CompileIssue } from '../../core/contract.ts';
 import { validateContent } from '../../core/validate.ts';
-import { TEMPLATE_PATH, TEMPLATE_SOURCE, hasTemplateMarker, normalizeContentFile } from '../shared/content-file.ts';
+import { metaRelPathFor, nodeIdFromPath } from '../../core/metadata.ts';
+import { TEMPLATE_META_SOURCE, TEMPLATE_PATH, TEMPLATE_SOURCE, hasTemplateMarker, normalizeContentFile } from '../shared/content-file.ts';
 import { primaryTagOf } from '../shared/commit-message.ts';
 import { openInEditor } from '../shared/editor.ts';
 import { slugify } from '../shared/slug.ts';
@@ -57,6 +58,7 @@ function stateJson(state: BlogState): Record<string, unknown> {
     },
     candidates: state.candidates.map((candidate) => ({
       path: candidate.path,
+      metaPath: candidate.metaPath,
       id: candidate.id,
       kind: candidate.kind,
       staged: candidate.staged,
@@ -118,7 +120,7 @@ async function handleBlockers(state: BlogState): Promise<'again' | number> {
       { value: 'edit', label: '打开编辑器处理', hint: target.path },
       {
         value: 'ai',
-        label: '运行 AI 补全 frontmatter',
+        label: '运行 AI 补全元数据',
         hint: process.env.DEEPSEEK_API_KEY ? '子进程运行 npm run ai' : '需要 DEEPSEEK_API_KEY',
         disabled: !process.env.DEEPSEEK_API_KEY,
       },
@@ -131,8 +133,8 @@ async function handleBlockers(state: BlogState): Promise<'again' | number> {
   }
 
   if (action === 'edit') {
-    const opened = await openInEditor(path.join(state.root, target.path));
-    if (!opened) p.log.error('无法打开编辑器，请手动打开：' + target.path);
+    const opened = await openInEditor(path.join(state.root, target.metaPath));
+    if (!opened) p.log.error('无法打开编辑器，请手动打开：' + target.metaPath);
     return 'again';
   }
 
@@ -167,7 +169,8 @@ async function commitFlow(state: BlogState, candidate: Candidate): Promise<'agai
   const plan = planCommit(state, candidate);
   p.note(
     [
-      `file: ${candidate.path}`,
+      `body: ${candidate.path}`,
+      `meta: ${candidate.metaPath}`,
       `tags: ${String(candidate.data?.tags ?? '(missing)')}`,
       `kind: ${plan.kind}`,
       `commit: ${plan.message}`,
@@ -225,7 +228,7 @@ async function handleCandidate(state: BlogState, candidate: Candidate): Promise<
   if (candidate.errors.length > 0) {
     printIssues(candidate.errors);
     const action = await p.select({
-      message: 'frontmatter 还有问题，要做什么？',
+      message: '元数据还有问题，要做什么？',
       options: [
         {
           value: 'ai',
@@ -242,8 +245,8 @@ async function handleCandidate(state: BlogState, candidate: Candidate): Promise<
       return 1;
     }
     if (action === 'edit') {
-      const opened = await openInEditor(path.join(state.root, candidate.path));
-      if (!opened) p.log.error('无法打开编辑器，请手动编辑：' + candidate.path);
+      const opened = await openInEditor(path.join(state.root, candidate.metaPath));
+      if (!opened) p.log.error('无法打开编辑器，请手动编辑：' + candidate.metaPath);
       return 'again';
     }
     return runAiFrontmatter(state.root, candidate.path) === 0 ? 'again' : 1;
@@ -279,8 +282,8 @@ async function handleCandidate(state: BlogState, candidate: Candidate): Promise<
       return 1;
     }
     if (action === 'edit') {
-      const opened = await openInEditor(path.join(state.root, candidate.path));
-      if (!opened) p.log.error('无法打开编辑器，请手动编辑：' + candidate.path);
+      const opened = await openInEditor(path.join(state.root, candidate.metaPath));
+      if (!opened) p.log.error('无法打开编辑器，请手动编辑：' + candidate.metaPath);
       return 'again';
     }
     if (action === 'ai') {
@@ -375,10 +378,11 @@ async function runInteractive(root: string): Promise<number> {
 
       try {
         const created = await createTemplateFile(root);
-        p.log.success(`已复制模板到 ${created}`);
-        const opened = await openInEditor(path.join(root, created));
+        const bodyPath = created[0]!;
+        p.log.success(`已复制模板到 ${created[0]} 与 ${created[1]}`);
+        const opened = await openInEditor(path.join(root, bodyPath));
         if (!opened) {
-          p.log.info(`请手动打开编辑器：${created}`);
+          p.log.info(`请手动打开编辑器：${bodyPath}`);
           p.outro('编辑完成后重新运行 npm run blog。');
           return 0;
         }
@@ -398,7 +402,7 @@ async function runInteractive(root: string): Promise<number> {
         options: state.candidates.map((item) => ({
           value: item.path,
           label: describeCandidate(item),
-          hint: item.errors.length > 0 ? '有 frontmatter 问题' : undefined,
+          hint: item.errors.length > 0 ? '有元数据问题' : undefined,
         })),
       });
       if (p.isCancel(selected)) {
@@ -503,15 +507,19 @@ const newCommand = defineCommand({
       return;
     }
     const target = requestedSlug ? `content/${requestedSlug}.md` : TEMPLATE_PATH;
+    const targetMeta = metaRelPathFor(target);
     const absPath = path.join(root, target);
 
-    if (existsSync(absPath)) {
+    if (existsSync(absPath) || existsSync(path.join(root, targetMeta))) {
       console.error(`文件已存在：${target}`);
       process.exitCode = 1;
       return;
     }
-    if (!existsSync(path.join(root, TEMPLATE_SOURCE))) {
-      console.error(`缺少模板：${TEMPLATE_SOURCE}`);
+    if (
+      !existsSync(path.join(root, TEMPLATE_SOURCE)) ||
+      !existsSync(path.join(root, TEMPLATE_META_SOURCE))
+    ) {
+      console.error(`缺少模板：${TEMPLATE_SOURCE} 或 ${TEMPLATE_META_SOURCE}`);
       process.exitCode = 1;
       return;
     }
@@ -520,9 +528,12 @@ const newCommand = defineCommand({
     if (args.open && canPrompt()) await openInEditor(absPath);
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify({ ok: true, path: target }, null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ ok: true, path: target, metaPath: targetMeta }, null, 2)}\n`,
+      );
     } else {
       console.log(`created ${target}`);
+      console.log(`meta: ${targetMeta}`);
       console.log(`next: npm run ai -- frontmatter ${target}`);
     }
   },
@@ -549,7 +560,13 @@ const saveCommand = defineCommand({
     let candidate: Candidate | undefined;
     if (args.file) {
       const normalized = args.file.replace(/\\/gu, '/').replace(/^\.\//u, '');
-      candidate = state.candidates.find((item) => item.path === normalized);
+      const id = nodeIdFromPath(normalized);
+      candidate = state.candidates.find(
+        (item) =>
+          item.path === normalized ||
+          item.metaPath === normalized ||
+          item.id === id,
+      );
       if (!candidate) {
         console.error(`没有待提交的内容改动：${normalized}`);
         process.exitCode = 1;
@@ -713,8 +730,10 @@ const doctorCommand = defineCommand({
     checks.push({ name: 'node', ok: major >= 22, detail: process.versions.node });
     checks.push({
       name: 'template',
-      ok: existsSync(path.join(root, TEMPLATE_SOURCE)),
-      detail: TEMPLATE_SOURCE,
+      ok:
+        existsSync(path.join(root, TEMPLATE_SOURCE)) &&
+        existsSync(path.join(root, TEMPLATE_META_SOURCE)),
+      detail: `${TEMPLATE_SOURCE}, ${TEMPLATE_META_SOURCE}`,
     });
     checks.push({
       name: 'deepseek-key',

@@ -1,4 +1,6 @@
+import { rm } from 'node:fs/promises';
 import { loadSiteConfig } from '../../core/config.ts';
+import { nodeIdFromPath } from '../../core/metadata.ts';
 import { normalizeTags } from '../../core/schema.ts';
 import { validateContent } from '../../core/validate.ts';
 import { sha256Hex } from '../../core/hash.ts';
@@ -7,7 +9,7 @@ import {
   getPrimaryTag,
   inspectFrontmatter,
   readRawContentFile,
-  writeContentFile,
+  writeMetadataFile,
   type RawContentFile,
 } from '../shared/content-file.ts';
 import { chatJson, type AiUsage } from './client.ts';
@@ -59,6 +61,10 @@ export function currentFieldHint(
   return `当前：${String(value)}`;
 }
 
+function contentPairHash(target: RawContentFile): string {
+  return sha256Hex(`${target.raw}\u0000${target.metaRaw}`);
+}
+
 function trimLine(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const text = value.replace(/\s+/gu, ' ').trim();
@@ -106,7 +112,7 @@ function normalizeProposal(
 
   if (proposal.extends) {
     const id = proposal.extends.id.trim();
-    if (id === target.relPath.replace(/^content\//u, '').replace(/\.md$/u, '')) {
+    if (id === nodeIdFromPath(target.relPath)) {
       next.extends = null;
       warnings.push('AI suggested the node itself as parent; ignored.');
     } else if (!context.ids.has(id)) {
@@ -136,7 +142,7 @@ export async function generateFrontmatter(
   const target = await readRawContentFile(root, relPath);
   const inspected = inspectFrontmatter(target.data);
   if (inspected.issues.length > 0) {
-    throw new Error(`Cannot edit malformed frontmatter: ${inspected.issues.join(' ')}`);
+    throw new Error(`Cannot edit malformed metadata: ${inspected.issues.join(' ')}`);
   }
 
   const context = await buildAiContext(root);
@@ -145,7 +151,7 @@ export async function generateFrontmatter(
     root,
     messages,
     maxTokens: 1_800,
-    cacheKey: `frontmatter:v1:${fields.join(',')}:${sha256Hex(target.raw)}`,
+    cacheKey: `frontmatter:v1:${fields.join(',')}:${contentPairHash(target)}`,
     noCache: options.noCache,
     parse: (value) => frontmatterProposalSchema.parse(value),
   });
@@ -158,7 +164,7 @@ export async function generateFrontmatter(
     cached: result.cached,
     model: result.model,
     usage: result.usage,
-    fileHash: sha256Hex(target.raw),
+    fileHash: contentPairHash(target),
   };
 }
 
@@ -225,7 +231,7 @@ export async function applyFrontmatter(
   options: { force?: boolean; expectedHash?: string } = {},
 ): Promise<ApplyResult> {
   const current = await readRawContentFile(root, relPath);
-  const currentHash = sha256Hex(current.raw);
+  const currentHash = contentPairHash(current);
   if (options.expectedHash && options.expectedHash !== currentHash) {
     throw new Error('The file changed while the AI was thinking. Regenerate the proposal.');
   }
@@ -239,7 +245,7 @@ export async function applyFrontmatter(
   const before = await validateContent(root, config, { allowReservedId: true });
   const beforeKeys = issueKeys(before.issues);
 
-  await writeContentFile(root, relPath, merged.data, current.body);
+  await writeMetadataFile(root, relPath, merged.data);
   const after = await validateContent(root, config, { allowReservedId: true });
   const newErrors = after.issues.filter(
     (issue) =>
@@ -248,9 +254,13 @@ export async function applyFrontmatter(
   );
 
   if (newErrors.length > 0) {
-    await writeContentFile(root, relPath, current.data, current.body);
+    if (current.metaExists) {
+      await writeMetadataFile(root, relPath, current.data);
+    } else {
+      await rm(current.metaAbsPath, { force: true });
+    }
     throw new Error(
-      `Frontmatter was rolled back because validation failed: ${newErrors
+      `Metadata was rolled back because validation failed: ${newErrors
         .map((issue) => issue.message)
         .join('; ')}`,
     );

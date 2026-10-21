@@ -17,6 +17,9 @@ function makeEntry(id: string, options: EntryOptions = {}): ParsedContent {
     absPath: '',
     raw: Buffer.from(''),
     body: '',
+    metaRelPath: `content/${id}.meta.yml`,
+    metaAbsPath: '',
+    metaRaw: Buffer.from(''),
     frontmatter: {
       tags: primaryTag,
       ...(options.extends ? { extends: options.extends } : {}),
@@ -29,6 +32,7 @@ function makeEntry(id: string, options: EntryOptions = {}): ParsedContent {
       secondaryTags: [],
     },
     mtimeMs: 0,
+    metaMtimeMs: 0,
   };
 }
 

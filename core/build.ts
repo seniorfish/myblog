@@ -402,7 +402,8 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
 
     const rendered = await renderMarkdown(entry.body);
     searchTexts.set(entry.id, rendered.plainText);
-    const status = getWorkingStatus(root, entry.relPath);
+    const bodyStatus = getWorkingStatus(root, entry.relPath);
+    const metaStatus = getWorkingStatus(root, entry.metaRelPath);
     const history = getFileHistory(root, entry.relPath);
     const revisions = makeRevision(entry, root, history, warnings);
     const times = resolveAnchorTimes(revisions, coverage, entry.mtimeMs);
@@ -434,8 +435,8 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
       displayTime: times.displayTime,
       displayDate: formatDisplayDate(times.displayTime, config.timezone),
       isVerified: times.isVerified,
-      isDirty: status.dirty,
-      isUntracked: status.untracked,
+      isDirty: bodyStatus.dirty || metaStatus.dirty,
+      isUntracked: bodyStatus.untracked || metaStatus.untracked,
       revisions: times.revisions,
       ancestors: [],
       children: [],

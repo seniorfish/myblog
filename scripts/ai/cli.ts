@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import * as p from '@clack/prompts';
 import { defineCommand, runMain } from 'citty';
+import { nodeIdFromPath } from '../../core/metadata.ts';
 import { getPrimaryTag, inspectFrontmatter, readRawContentFile } from '../shared/content-file.ts';
 import { openInEditor } from '../shared/editor.ts';
 import { aiConfigSummary } from './client.ts';
@@ -40,6 +41,15 @@ async function listContentFiles(root: string): Promise<string[]> {
     .map((name) => `content/${name}`);
 }
 
+/** Accept either content/foo.md or content/foo.meta.yml. */
+function normalizeContentArg(value: string): string {
+  const normalized = value.replace(/\\/gu, '/').replace(/^\.\//u, '');
+  if (normalized.toLowerCase().endsWith('.meta.yml')) {
+    return `content/${nodeIdFromPath(normalized)}.md`;
+  }
+  return normalized;
+}
+
 function parseFields(value: string | undefined): FrontmatterField[] {
   if (!value) return [];
   const fields = value
@@ -76,14 +86,14 @@ async function runFrontmatterInteractive(root: string, relPath: string): Promise
   if (inspected.issues.length > 0) {
     for (const issue of inspected.issues) p.log.error(issue);
     const action = await p.select({
-      message: 'frontmatter 有格式问题，要做什么？',
+      message: '元数据有格式问题，要做什么？',
       options: [
         { value: 'edit', label: '打开编辑器修复' },
         { value: 'exit', label: '退出' },
       ],
     });
     if (!p.isCancel(action) && action === 'edit') {
-      await openInEditor(path.join(root, relPath));
+      await openInEditor(target.metaExists ? target.metaAbsPath : path.join(root, relPath));
     }
     return 1;
   }
@@ -120,7 +130,7 @@ async function runFrontmatterInteractive(root: string, relPath: string): Promise
   let noCache = false;
   for (;;) {
     const spinner = p.spinner();
-    spinner.start('正在生成 frontmatter…');
+    spinner.start('正在生成元数据…');
     let generation;
     try {
       generation = await generateFrontmatter(root, relPath, fields, { noCache });
@@ -166,7 +176,7 @@ async function runFrontmatterInteractive(root: string, relPath: string): Promise
       );
 
       if (action === 'edit') {
-        await openInEditor(path.join(root, relPath));
+        await openInEditor(target.metaExists ? target.metaAbsPath : path.join(root, relPath));
       }
 
       p.outro(`下一步：npm run blog -- save ${relPath}`);
@@ -277,7 +287,7 @@ async function runInteractive(root: string): Promise<number> {
   const operation = await p.select({
     message: '选择操作',
     options: [
-      { value: 'frontmatter', label: 'frontmatter', hint: '补全 tags / title / description' },
+      { value: 'frontmatter', label: '元数据', hint: '补全 tags / title / description' },
       { value: 'language', label: '语言优化建议', hint: '校对 / 精简 / 改写' },
       { value: 'translate', label: '翻译', hint: '即将支持', disabled: true },
     ],
@@ -301,7 +311,7 @@ async function runInteractive(root: string): Promise<number> {
 const frontmatterCommand = defineCommand({
   meta: {
     name: 'frontmatter',
-    description: '为单个文件建议或应用 frontmatter。',
+    description: '为单个文件建议或应用元数据（.meta.yml）。',
   },
   args: {
     file: { type: 'positional', required: true, description: '内容文件。' },
@@ -313,7 +323,7 @@ const frontmatterCommand = defineCommand({
   },
   async run({ args }) {
     const root = process.cwd();
-    const relPath = String(args.file).replace(/\\/gu, '/');
+    const relPath = normalizeContentArg(String(args.file));
     try {
       const target = await readRawContentFile(root, relPath);
       const inspected = inspectFrontmatter(target.data);
@@ -426,7 +436,7 @@ const languageCommand = defineCommand({
   },
   async run({ args }) {
     const root = process.cwd();
-    const relPath = String(args.file).replace(/\\/gu, '/');
+    const relPath = normalizeContentArg(String(args.file));
     const mode = (args.mode ?? 'proofread') as LanguageMode;
     const output = (args.output ?? 'advice') as LanguageOutput;
     if (args.write && output !== 'rewrite') {
@@ -543,7 +553,7 @@ const main = defineCommand({
   meta: {
     name: 'ai',
     version: '0.1.0',
-    description: '单文件 AI 助手：frontmatter、语言优化。',
+    description: '单文件 AI 助手：元数据、语言优化。',
   },
   subCommands: {
     frontmatter: frontmatterCommand,

@@ -42,12 +42,12 @@ export const frontmatterSchema = z.object({
 export type Frontmatter = z.infer<typeof frontmatterSchema>;
 
 /**
- * Validate raw frontmatter before Zod parsing so date fields and typos get
+ * Validate raw metadata before Zod parsing so date fields and typos get
  * actionable error messages instead of a generic "unrecognized key" error.
  */
 export function parseFrontmatter(raw: unknown): Frontmatter {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new FrontmatterError('Frontmatter must be a YAML mapping.');
+    throw new FrontmatterError('Metadata must be a YAML mapping.');
   }
 
   const record = raw as Record<string, unknown>;
@@ -55,7 +55,7 @@ export function parseFrontmatter(raw: unknown): Frontmatter {
   for (const key of FORBIDDEN_DATE_KEYS) {
     if (key in record) {
       throw new FrontmatterError(
-        `Frontmatter field "${key}" is not allowed. Dates are derived from Git commits and blockchain anchors; remove it.`,
+        `Metadata field "${key}" is not allowed. Dates are derived from Git commits and blockchain anchors; remove it.`,
         key,
       );
     }
@@ -66,7 +66,7 @@ export function parseFrontmatter(raw: unknown): Frontmatter {
   );
   if (unknown.length > 0) {
     throw new FrontmatterError(
-      `Unknown frontmatter field(s): ${unknown.join(', ')}. Allowed: ${ALLOWED_FRONTMATTER_KEYS.join(', ')}.`,
+      `Unknown metadata field(s): ${unknown.join(', ')}. Allowed: ${ALLOWED_FRONTMATTER_KEYS.join(', ')}.`,
       unknown[0],
     );
   }
@@ -76,7 +76,7 @@ export function parseFrontmatter(raw: unknown): Frontmatter {
     const first = result.error.issues[0];
     const field = first?.path.join('.') || undefined;
     throw new FrontmatterError(
-      first ? `${field ?? 'frontmatter'}: ${first.message}` : result.error.message,
+      first ? `${field ?? 'metadata'}: ${first.message}` : result.error.message,
       field,
     );
   }

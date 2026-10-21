@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import matter from 'gray-matter';
+import { metaRelPathFor, parseMetadataSource } from '../../core/metadata.ts';
 
 export function slugify(input: string): string {
   const ascii = input
@@ -41,9 +41,10 @@ export async function collectExistingIds(root: string): Promise<Set<string>> {
     ids.add(relative.replace(/\.md$/iu, ''));
 
     try {
-      const source = await readFile(path.join(root, 'content', relative), 'utf8');
-      const parsed = matter(source);
-      const aliases = parsed.data.aliases;
+      const metaRel = metaRelPathFor(`content/${relative}`);
+      const source = await readFile(path.join(root, metaRel), 'utf8');
+      const data = parseMetadataSource(source);
+      const aliases = data.aliases;
       if (Array.isArray(aliases)) {
         for (const alias of aliases) {
           if (typeof alias === 'string' && alias.trim()) ids.add(alias.trim());

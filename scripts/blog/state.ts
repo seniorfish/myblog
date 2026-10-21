@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { loadSiteConfig } from '../../core/config.ts';
 import type { CompileIssue, SiteConfig } from '../../core/contract.ts';
+import { isMarkdownPath, isMetaPath, metaRelPathFor, nodeIdFromPath } from '../../core/metadata.ts';
 import { validateContent, type ContentValidation } from '../../core/validate.ts';
 import {
   hasTemplateMarker,
@@ -20,6 +21,7 @@ export type CandidateKind = 'untracked' | 'modified' | 'deleted' | 'renamed';
 
 export interface Candidate {
   path: string;
+  metaPath: string;
   id: string;
   kind: CandidateKind;
   exists: boolean;
@@ -45,17 +47,27 @@ export interface BlogState {
   canCommit: boolean;
 }
 
+const KIND_PRIORITY: Record<CandidateKind, number> = {
+  untracked: 1,
+  modified: 2,
+  renamed: 3,
+  deleted: 4,
+};
+
 function toPosix(value: string): string {
   return value.replace(/\\/gu, '/');
 }
 
 function candidateId(relPath: string): string {
-  return relPath.replace(/^content\//u, '').replace(/\.md$/iu, '');
+  return nodeIdFromPath(toPosix(relPath));
 }
 
-function isContentMarkdown(relPath: string): boolean {
+function isContentPath(relPath: string): boolean {
   const normalized = toPosix(relPath);
-  return normalized.startsWith('content/') && normalized.toLowerCase().endsWith('.md');
+  return (
+    normalized.startsWith('content/') &&
+    (isMarkdownPath(normalized) || isMetaPath(normalized))
+  );
 }
 
 function candidateKind(entry: GitStatusEntry): CandidateKind {
@@ -63,6 +75,10 @@ function candidateKind(entry: GitStatusEntry): CandidateKind {
   if (entry.renamed) return 'renamed';
   if (entry.deleted) return 'deleted';
   return 'modified';
+}
+
+function strongerKind(left: CandidateKind, right: CandidateKind): CandidateKind {
+  return KIND_PRIORITY[left] >= KIND_PRIORITY[right] ? left : right;
 }
 
 function issueKey(issue: CompileIssue): string {
@@ -91,37 +107,47 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
   const git = repo ? readGitContext(root) : isEmptyGitContext();
   const fixes: string[] = [];
 
-  const contentStatus = git.status.filter((entry) => isContentMarkdown(entry.path));
-  const candidatesByPath = new Map<string, Candidate>();
+  const contentStatus = git.status.filter((entry) => isContentPath(entry.path));
+  const candidatesById = new Map<string, Candidate>();
 
   for (const entry of contentStatus) {
     const relPath = toPosix(entry.path);
-    if (candidatesByPath.has(relPath)) continue;
-
+    const id = candidateId(relPath);
+    const bodyPath = `content/${id}.md`;
+    const metaPath = metaRelPathFor(bodyPath);
     const kind = candidateKind(entry);
-    const absPath = path.join(root, relPath);
-    const exists = kind !== 'deleted' && existsSync(absPath);
+
+    const existing = candidatesById.get(id);
+    if (existing) {
+      existing.kind = strongerKind(existing.kind, kind);
+      existing.staged = existing.staged || entry.staged;
+      existing.exists = existing.exists || existsSync(path.join(root, bodyPath));
+      continue;
+    }
+
+    const bodyExists = existsSync(path.join(root, bodyPath));
     const candidate: Candidate = {
-      path: relPath,
-      id: candidateId(relPath),
+      path: bodyPath,
+      metaPath,
+      id,
       kind,
-      exists,
+      exists: bodyExists,
       staged: entry.staged,
-      isTemplate: isTemplateId(candidateId(relPath)),
+      isTemplate: isTemplateId(id),
       errors: [],
       warnings: [],
     };
 
-    if (exists) {
+    if (bodyExists) {
       try {
-        const normalized = await normalizeContentFile(root, relPath);
-        fixes.push(...normalized.map((fix) => `${relPath}: ${fix}`));
+        const normalized = await normalizeContentFile(root, bodyPath);
+        fixes.push(...normalized.map((fix) => `${bodyPath}: ${fix}`));
       } catch {
         // A malformed file is reported below by the shared validator.
       }
 
       try {
-        const raw = await readRawContentFile(root, relPath);
+        const raw = await readRawContentFile(root, bodyPath);
         candidate.data = raw.data;
         candidate.body = raw.body;
         if (hasTemplateMarker(raw.body)) candidate.isTemplate = true;
@@ -130,20 +156,23 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
       }
     }
 
-    candidatesByPath.set(relPath, candidate);
+    candidatesById.set(id, candidate);
   }
 
   const validation = await validateContent(root, config, { allowReservedId: true });
-  const candidatePaths = new Set(candidatesByPath.keys());
+  const globalErrors: CompileIssue[] = [];
 
-  for (const candidate of candidatesByPath.values()) {
-    candidate.errors = validation.issues.filter(
-      (issue) => issue.level === 'error' && issue.file === candidate.path,
-    );
-    candidate.warnings = validation.issues.filter(
-      (issue) => issue.level === 'warning' && issue.file === candidate.path,
-    );
+  for (const issue of validation.issues) {
+    const candidate = issue.file ? candidatesById.get(candidateId(issue.file)) : undefined;
+    if (candidate) {
+      if (issue.level === 'error') candidate.errors.push(issue);
+      else candidate.warnings.push(issue);
+      continue;
+    }
+    if (issue.level === 'error') globalErrors.push(issue);
+  }
 
+  for (const candidate of candidatesById.values()) {
     if (candidate.readError) {
       candidate.errors.push({
         level: 'error',
@@ -152,12 +181,6 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
       });
     }
   }
-
-  const globalErrors = validation.issues.filter(
-    (issue) =>
-      issue.level === 'error' &&
-      (!issue.file || !candidatePaths.has(issue.file)),
-  );
 
   const blockers: string[] = [];
   if (!repo) blockers.push(`不是 Git 仓库：${root}`);
@@ -177,7 +200,7 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
     blockers.push(issue.message);
   }
 
-  for (const candidate of candidatesByPath.values()) {
+  for (const candidate of candidatesById.values()) {
     if (candidate.kind === 'renamed') {
       blockers.push(`${candidate.path}：重命名会改变节点 id，请用新文件 + aliases。`);
     }
@@ -190,7 +213,7 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
   }
 
   const notes: string[] = [];
-  const nonContentChanges = git.status.filter((entry) => !isContentMarkdown(entry.path));
+  const nonContentChanges = git.status.filter((entry) => !isContentPath(entry.path));
   if (nonContentChanges.length > 0) {
     notes.push(`有 ${nonContentChanges.length} 个非内容改动，本次不会处理。`);
   }
@@ -198,7 +221,9 @@ export async function gatherBlogState(root: string): Promise<BlogState> {
   if (git.behind > 0) notes.push(`分支落后远端 ${git.behind} 个提交。`);
   if (git.ahead > 0) notes.push(`分支领先远端 ${git.ahead} 个提交。`);
 
-  const candidates = [...candidatesByPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+  const candidates = [...candidatesById.values()].sort((a, b) =>
+    a.path.localeCompare(b.path),
+  );
   const candidateErrors = candidates.some((candidate) => candidate.errors.length > 0);
   const canCommit = blockers.length === 0 && !candidateErrors;
 

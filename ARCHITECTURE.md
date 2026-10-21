@@ -42,8 +42,9 @@ SiteData ──► build/generated/
 | 文件 | 职责 |
 | --- | --- |
 | `core/contract.ts` | 唯一数据契约；主题只能依赖它 |
-| `core/schema.ts` | frontmatter、anchor note、theme.contract 的 Zod 校验 |
-| `core/content.ts` | 发现 `.md`、解析 frontmatter |
+| `core/schema.ts` | 元数据、anchor note、theme.contract 的 Zod 校验 |
+| `core/metadata.ts` | `.meta.yml` 路径、YAML 解析/序列化、字段顺序 |
+| `core/content.ts` | 成对发现 `.md` 正文与 `.meta.yml` 元数据 |
 | `core/markdown.ts` | Markdown → HTML；GFM、GitHub alerts、Shiki 双主题 |
 | `core/tree.ts` | `extends` 图；防断链/防环/别名；祖先与子节点 |
 | `core/git.ts` | `git log --follow`、blob、diff、notes、工作区状态 |
@@ -55,7 +56,9 @@ SiteData ──► build/generated/
 
 ## 3. 内容模型
 
-Frontmatter 只允许：
+每篇内容是一对文件：`content/{id}.md` 只放正文，`content/{id}.meta.yml` 放元数据。`.md` 不允许 `---` frontmatter。
+
+元数据只允许：
 
 ```yaml
 tags: 文章 建站        # 必填；空格分隔；第一个是主 Tag
@@ -229,7 +232,7 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 | 命令 | 研究对象 | 负责 | 禁止 |
 | --- | --- | --- | --- |
 | `npm run blog` | 仓库 / Git / 文件 | 状态检查、模板、校验、commit、push、未来 anchor | 不改写正文语义 |
-| `npm run ai` | 单个 `.md` | frontmatter 建议、语言建议/改写、未来翻译 | 不执行 Git 写操作 |
+| `npm run ai` | 单个 `.md` + `.meta.yml` | 元数据建议、语言建议/改写、未来翻译 | 不执行 Git 写操作 |
 
 - `scripts/blog/state.ts` 采集 Git 与内容状态；`blocking` 直接阻止，`decision` 交给交互层，安全机械问题由 `scripts/shared/content-file.ts` 修复。
 - `scripts/blog/cli.ts` 用 `@clack/prompts` 做交互、`citty` 做子命令。非交互模式始终提供 `--json`，遇到需要决策的情况返回非零退出码而不是猜测。

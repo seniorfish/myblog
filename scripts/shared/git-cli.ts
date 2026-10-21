@@ -194,10 +194,14 @@ export function stagePath(root: string, relPath: string): void {
   runGit(root, ['add', '-A', '--', relPath]);
 }
 
-export function commitPath(root: string, relPath: string, message: string): string {
-  stagePath(root, relPath);
-  runGit(root, ['commit', '--only', '-m', message, '--', relPath]);
+export function commitPaths(root: string, relPaths: string[], message: string): string {
+  for (const relPath of relPaths) stagePath(root, relPath);
+  runGit(root, ['commit', '--only', '-m', message, '--', ...relPaths]);
   return tryGit(root, ['rev-parse', 'HEAD']) ?? '';
+}
+
+export function commitPath(root: string, relPath: string, message: string): string {
+  return commitPaths(root, [relPath], message);
 }
 
 export function pullFfOnly(root: string): string {

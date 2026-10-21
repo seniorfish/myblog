@@ -2,20 +2,25 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { serializeMetadata } from '../core/metadata.ts';
 import {
   inspectFrontmatter,
   normalizeContentFile,
   readRawContentFile,
-  serializeContent,
+  writeMetadataFile,
 } from '../scripts/shared/content-file.ts';
 
 const roots: string[] = [];
 
-async function tempFile(source: string): Promise<{ root: string; rel: string }> {
+async function tempFile(
+  body: string,
+  meta: string,
+): Promise<{ root: string; rel: string }> {
   const root = await mkdtemp(path.join(tmpdir(), 'myblog-content-'));
   roots.push(root);
   await mkdir(path.join(root, 'content'), { recursive: true });
-  await writeFile(path.join(root, 'content', 'note.md'), source, 'utf8');
+  await writeFile(path.join(root, 'content', 'note.md'), body, 'utf8');
+  await writeFile(path.join(root, 'content', 'note.meta.yml'), meta, 'utf8');
   return { root, rel: 'content/note.md' };
 }
 
@@ -28,7 +33,8 @@ afterEach(async () => {
 describe('readRawContentFile', () => {
   it('removes empty optional fields and normalizes comma tags', async () => {
     const { root, rel } = await tempFile(
-      '---\ntags: 想法,硬件\ntitle:\ndescription:\n---\n\n正文\n',
+      '正文\n',
+      'tags: 想法,硬件\ntitle:\ndescription:\n',
     );
     const raw = await readRawContentFile(root, rel);
     expect(raw.data.tags).toBe('想法 硬件');
@@ -36,13 +42,31 @@ describe('readRawContentFile', () => {
     expect(raw.fixes).toContain('normalized comma-separated `tags`');
   });
 
-  it('normalizeContentFile writes the cleaned frontmatter', async () => {
-    const { root, rel } = await tempFile('---\ntags: 想法\ndescription:\n---\n\n正文\n');
+  it('rejects frontmatter left in the body file', async () => {
+    const { root, rel } = await tempFile('---\ntags: 文章\n---\n\n正文\n', 'tags: 文章\n');
+    await expect(readRawContentFile(root, rel)).rejects.toThrow(/no longer supported/i);
+  });
+
+  it('normalizeContentFile writes the cleaned metadata', async () => {
+    const { root, rel } = await tempFile(
+      '正文\n',
+      'tags: 想法\ndescription:\n',
+    );
     const fixes = await normalizeContentFile(root, rel);
     expect(fixes.length).toBeGreaterThan(0);
-    const written = await readFile(path.join(root, rel), 'utf8');
+    const written = await readFile(path.join(root, 'content', 'note.meta.yml'), 'utf8');
     expect(written).not.toContain('description:');
     expect(written).toContain('tags: 想法');
+  });
+
+  it('does not rewrite the body when only metadata needs cleaning', async () => {
+    const { root, rel } = await tempFile('正文', 'tags: 想法\ndescription:\n');
+    const bodyPath = path.join(root, 'content', 'note.md');
+    const before = await readFile(bodyPath, 'utf8');
+
+    await normalizeContentFile(root, rel);
+
+    expect(await readFile(bodyPath, 'utf8')).toBe(before);
   });
 });
 
@@ -57,10 +81,24 @@ describe('inspectFrontmatter', () => {
   });
 });
 
-describe('serializeContent', () => {
-  it('keeps a trailing newline and preserves the body', () => {
-    const text = serializeContent({ tags: '闪念', title: '标题' }, '正文\n');
-    expect(text.startsWith('---\n')).toBe(true);
-    expect(text.endsWith('正文\n')).toBe(true);
+describe('serializeMetadata', () => {
+  it('orders keys and keeps a trailing newline', () => {
+    const text = serializeMetadata({ title: '标题', tags: '闪念' });
+    expect(text).toBe('tags: 闪念\ntitle: 标题\n');
+  });
+});
+
+describe('writeMetadataFile', () => {
+  it('does not touch the body file', async () => {
+    const { root, rel } = await tempFile('正文\n', 'tags: 闪念\n');
+    const bodyPath = path.join(root, 'content', 'note.md');
+    const before = await readFile(bodyPath, 'utf8');
+
+    await writeMetadataFile(root, rel, { tags: '闪念', title: '标题' });
+
+    expect(await readFile(bodyPath, 'utf8')).toBe(before);
+    expect(await readFile(path.join(root, 'content', 'note.meta.yml'), 'utf8')).toContain(
+      'title: 标题',
+    );
   });
 });

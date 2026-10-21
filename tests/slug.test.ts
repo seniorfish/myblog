@@ -39,11 +39,13 @@ describe('makeSlug', () => {
 describe('uniqueSlug', () => {
   it('reads ids and aliases before assigning a slug', async () => {
     const root = await tempRoot();
+    await writeFile(path.join(root, 'content', 'hello.md'), 'body\n');
     await writeFile(
-      path.join(root, 'content', 'hello.md'),
-      '---\ntags: 文章\naliases: [old-hello]\n---\n\nbody\n',
+      path.join(root, 'content', 'hello.meta.yml'),
+      'tags: 文章\naliases: [old-hello]\n',
     );
-    await writeFile(path.join(root, 'content', 'hello-2.md'), '---\ntags: 文章\n---\n\nbody\n');
+    await writeFile(path.join(root, 'content', 'hello-2.md'), 'body\n');
+    await writeFile(path.join(root, 'content', 'hello-2.meta.yml'), 'tags: 文章\n');
 
     const ids = await collectExistingIds(root);
     expect(ids.has('hello')).toBe(true);

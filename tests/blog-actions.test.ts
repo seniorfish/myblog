@@ -37,9 +37,10 @@ function git(args: string[]): string {
 }
 
 async function writeNote(body: string, title = '标题'): Promise<void> {
+  await writeFile(path.join(repo, 'content', 'a.md'), `${body}\n`);
   await writeFile(
-    path.join(repo, 'content', 'a.md'),
-    `---\ntags: 文章 建站\ntitle: ${title}\n---\n\n${body}\n`,
+    path.join(repo, 'content', 'a.meta.yml'),
+    `tags: 文章 建站\ntitle: ${title}\n`,
   );
 }
 
@@ -61,10 +62,11 @@ afterEach(async () => {
 
 describe('commitCandidate', () => {
   it('commits one modified note with a deterministic message', async () => {
-    await writeNote('second body');
+    await writeNote('second body', '新标题');
     const raw = await readRawContentFile(repo, 'content/a.md');
     const candidate: Candidate = {
       path: 'content/a.md',
+      metaPath: 'content/a.meta.yml',
       id: 'a',
       kind: 'modified',
       exists: true,
@@ -90,8 +92,10 @@ describe('commitCandidate', () => {
     } as unknown as BlogState;
 
     const result = await commitCandidate(state, candidate);
-    expect(result.message).toBe('content(文章): update 标题');
-    expect(git(['log', '-1', '--format=%s'])).toBe('content(文章): update 标题');
-    expect(git(['show', '--name-only', '--format=', 'HEAD'])).toBe('content/a.md');
+    expect(result.message).toBe('content(文章): update 新标题');
+    expect(git(['log', '-1', '--format=%s'])).toBe('content(文章): update 新标题');
+    expect(
+      git(['show', '--name-only', '--format=', 'HEAD']).split('\n').sort(),
+    ).toEqual(['content/a.md', 'content/a.meta.yml']);
   });
 });

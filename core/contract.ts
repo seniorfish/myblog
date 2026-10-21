@@ -87,7 +87,7 @@ export interface RevisionProof {
   gitTimestamp: number;
   /** Unified diff of this file for this commit. */
   diff: string;
-  /** SHA-256 of the raw .md file at this commit. */
+  /** SHA-256 of the article body file (.md) at this commit. */
   fileSha256: string;
   anchor: AnchorInfo | null;
   /** Anchor block timestamp in seconds, or null when unverified. */

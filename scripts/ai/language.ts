@@ -2,7 +2,7 @@ import { loadSiteConfig } from '../../core/config.ts';
 import { sha256Hex } from '../../core/hash.ts';
 import { validateContent } from '../../core/validate.ts';
 import { renderDiff } from '../shared/diff.ts';
-import { readRawContentFile, writeContentFile } from '../shared/content-file.ts';
+import { readRawContentFile, writeBodyFile } from '../shared/content-file.ts';
 import { chatJson, type AiUsage } from './client.ts';
 import { buildAiContext } from './context.ts';
 import { buildLanguageMessages } from './prompts.ts';
@@ -22,6 +22,10 @@ export interface LanguageGeneration {
   diff: ReturnType<typeof renderDiff>;
 }
 
+function contentPairHash(target: { raw: string; metaRaw: string }): string {
+  return sha256Hex(`${target.raw}\u0000${target.metaRaw}`);
+}
+
 function countFences(text: string): number {
   return (text.match(/```/gu) ?? []).length;
 }
@@ -35,7 +39,7 @@ function headings(text: string): string[] {
 
 function assertSafeRewrite(mode: LanguageMode, before: string, after: string): void {
   if (after.trimStart().startsWith('---')) {
-    throw new Error('AI returned a body that looks like frontmatter; refusing to apply.');
+    throw new Error('AI returned a body that starts with a frontmatter delimiter; refusing to apply.');
   }
 
   const beforeHeadings = headings(before);
@@ -68,7 +72,7 @@ export async function generateLanguage(
     root,
     messages,
     maxTokens: 4_000,
-    cacheKey: `language:v1:${mode}:${output}:${sha256Hex(target.raw)}`,
+    cacheKey: `language:v1:${mode}:${output}:${contentPairHash(target)}`,
     noCache: options.noCache,
     parse: (value) => languageProposalSchema.parse(value),
   });
@@ -93,7 +97,7 @@ export async function generateLanguage(
     cached: result.cached,
     model: result.model,
     usage: result.usage,
-    fileHash: sha256Hex(target.raw),
+    fileHash: contentPairHash(target),
     diff,
   };
 }
@@ -105,7 +109,7 @@ export async function applyLanguage(
   options: { expectedHash?: string } = {},
 ): Promise<string> {
   const current = await readRawContentFile(root, relPath);
-  if (options.expectedHash && sha256Hex(current.raw) !== options.expectedHash) {
+  if (options.expectedHash && contentPairHash(current) !== options.expectedHash) {
     throw new Error('The file changed while the AI was thinking. Regenerate the proposal.');
   }
 
@@ -120,7 +124,7 @@ export async function applyLanguage(
       .map((issue) => `${issue.file ?? ''}|${issue.field ?? ''}|${issue.message}`),
   );
 
-  await writeContentFile(root, relPath, current.data, rewritten);
+  await writeBodyFile(root, relPath, rewritten);
   const after = await validateContent(root, config, { allowReservedId: true });
   const newErrors = after.issues.filter(
     (issue) =>
@@ -129,7 +133,7 @@ export async function applyLanguage(
   );
 
   if (newErrors.length > 0) {
-    await writeContentFile(root, relPath, current.data, current.body);
+    await writeBodyFile(root, relPath, current.body);
     throw new Error('Language edit introduced new validation errors; rolled back.');
   }
 

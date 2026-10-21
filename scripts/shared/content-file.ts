@@ -1,7 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import matter from 'gray-matter';
+import {
+  hasFrontmatterDelimiter,
+  metaRelPathFor,
+  parseMetadataYaml,
+  serializeMetadata,
+} from '../../core/metadata.ts';
 import {
   ALLOWED_FRONTMATTER_KEYS,
   FORBIDDEN_DATE_KEYS,
@@ -15,15 +20,23 @@ import {
 
 export const TEMPLATE_MARKER = '<!-- new-blog-template -->';
 export const TEMPLATE_PATH = 'content/new-blog.md';
+export const TEMPLATE_META_PATH = 'content/new-blog.meta.yml';
 export const TEMPLATE_SOURCE = 'templates/new-blog.md';
+export const TEMPLATE_META_SOURCE = 'templates/new-blog.meta.yml';
 
 export interface RawContentFile {
   root: string;
   relPath: string;
   absPath: string;
+  /** Body text as read from disk, after BOM removal. */
   raw: string;
+  /** Body text; kept as a separate name for callers that think in body terms. */
   body: string;
   data: Record<string, unknown>;
+  metaRelPath: string;
+  metaAbsPath: string;
+  metaRaw: string;
+  metaExists: boolean;
   fixes: string[];
 }
 
@@ -86,31 +99,74 @@ function cleanData(input: Record<string, unknown>): { data: Record<string, unkno
   return { data, fixes };
 }
 
+async function writeAtomic(absPath: string, text: string): Promise<void> {
+  const tempPath = `${absPath}.tmp-${randomBytes(4).toString('hex')}`;
+  await writeFile(tempPath, text, 'utf8');
+  await rename(tempPath, absPath);
+}
+
+function normalizeBody(body: string): string {
+  return body.length === 0 || body.endsWith('\n') ? body : `${body}\n`;
+}
+
 export async function readRawContentFile(
   root: string,
   relPath: string,
 ): Promise<RawContentFile> {
   const normalized = normalizeRelPath(relPath);
+  if (!normalized.toLowerCase().endsWith('.md')) {
+    throw new Error(`Expected a Markdown body path, got: ${relPath}`);
+  }
+
   const absPath = path.join(root, normalized);
-  let raw = await readFile(absPath, 'utf8');
+  const metaRelPath = metaRelPathFor(normalized);
+  const metaAbsPath = path.join(root, metaRelPath);
   const fixes: string[] = [];
 
+  let raw = await readFile(absPath, 'utf8');
   if (raw.charCodeAt(0) === 0xfeff) {
     raw = raw.slice(1);
     fixes.push('removed BOM');
   }
 
-  const parsed = matter(raw);
-  const cleaned = cleanData(parsed.data as Record<string, unknown>);
+  if (hasFrontmatterDelimiter(raw)) {
+    throw new Error(
+      `Frontmatter is no longer supported in ${normalized}. Move those fields to ${metaRelPath}.`,
+    );
+  }
+
+  let metaRaw = '';
+  let metaExists = false;
+  try {
+    metaRaw = await readFile(metaAbsPath, 'utf8');
+    metaExists = true;
+  } catch {
+    // A missing sidecar is reported by content validation; AI may create one.
+  }
+
+  let data: Record<string, unknown> = {};
+  if (metaExists) {
+    const parsed = parseMetadataYaml(metaRaw);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new FrontmatterError('Metadata must be a YAML mapping.');
+    }
+    const cleaned = cleanData(parsed as Record<string, unknown>);
+    data = cleaned.data;
+    fixes.push(...cleaned.fixes);
+  }
 
   return {
     root,
     relPath: normalized,
     absPath,
     raw,
-    body: parsed.content,
-    data: cleaned.data,
-    fixes: [...fixes, ...cleaned.fixes],
+    body: raw,
+    data,
+    metaRelPath,
+    metaAbsPath,
+    metaRaw,
+    metaExists,
+    fixes,
   };
 }
 
@@ -125,7 +181,7 @@ export async function readContentFile(
 }
 
 /**
- * Validate a frontmatter object without requiring `tags`. This is used while
+ * Validate a metadata object without requiring `tags`. This is used while
  * the AI is filling in a fresh note whose tags are still missing.
  */
 export function inspectFrontmatter(data: Record<string, unknown>): InspectResult {
@@ -133,7 +189,7 @@ export function inspectFrontmatter(data: Record<string, unknown>): InspectResult
 
   for (const key of FORBIDDEN_DATE_KEYS) {
     if (key in data) {
-      issues.push(`Frontmatter field "${key}" is not allowed; dates come from Git and chain anchors.`);
+      issues.push(`Metadata field "${key}" is not allowed; dates come from Git and chain anchors.`);
     }
   }
 
@@ -144,7 +200,7 @@ export function inspectFrontmatter(data: Record<string, unknown>): InspectResult
   );
   if (unknown.length > 0) {
     issues.push(
-      `Unknown frontmatter field(s): ${unknown.join(', ')}. Allowed: ${ALLOWED_FRONTMATTER_KEYS.join(', ')}.`,
+      `Unknown metadata field(s): ${unknown.join(', ')}. Allowed: ${ALLOWED_FRONTMATTER_KEYS.join(', ')}.`,
     );
   }
 
@@ -155,7 +211,7 @@ export function inspectFrontmatter(data: Record<string, unknown>): InspectResult
     const first = result.error.issues[0];
     issues.push(
       first
-        ? `${first.path.join('.') || 'frontmatter'}: ${first.message}`
+        ? `${first.path.join('.') || 'metadata'}: ${first.message}`
         : result.error.message,
     );
   }
@@ -163,24 +219,24 @@ export function inspectFrontmatter(data: Record<string, unknown>): InspectResult
   return { data, issues };
 }
 
-function orderData(data: Record<string, unknown>): Record<string, unknown> {
-  const ordered: Record<string, unknown> = {};
-  for (const key of ALLOWED_FRONTMATTER_KEYS) {
-    if (key in data) ordered[key] = data[key];
-  }
-  // Preserve unknown keys so a later validation can report them instead of
-  // silently dropping user data.
-  for (const [key, value] of Object.entries(data)) {
-    if (!(key in ordered)) ordered[key] = value;
-  }
-  return ordered;
+export async function writeMetadataFile(
+  root: string,
+  relPath: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const metaRelPath = metaRelPathFor(normalizeRelPath(relPath));
+  await writeAtomic(path.join(root, metaRelPath), serializeMetadata(data));
 }
 
-export function serializeContent(data: Record<string, unknown>, body: string): string {
-  const normalizedBody =
-    body.length > 0 && !body.startsWith('\n') ? `\n${body}` : body;
-  const text = matter.stringify(normalizedBody, orderData(data));
-  return text.endsWith('\n') ? text : `${text}\n`;
+export async function writeBodyFile(
+  root: string,
+  relPath: string,
+  body: string,
+  options: { ensureTrailingNewline?: boolean } = {},
+): Promise<void> {
+  const normalized = normalizeRelPath(relPath);
+  const text = options.ensureTrailingNewline === false ? body : normalizeBody(body);
+  await writeAtomic(path.join(root, normalized), text);
 }
 
 export async function writeContentFile(
@@ -189,11 +245,8 @@ export async function writeContentFile(
   data: Record<string, unknown>,
   body: string,
 ): Promise<void> {
-  const normalized = normalizeRelPath(relPath);
-  const absPath = path.join(root, normalized);
-  const tempPath = `${absPath}.tmp-${randomBytes(4).toString('hex')}`;
-  await writeFile(tempPath, serializeContent(data, body), 'utf8');
-  await rename(tempPath, absPath);
+  await writeMetadataFile(root, relPath, data);
+  await writeBodyFile(root, relPath, body);
 }
 
 export async function normalizeContentFile(
@@ -202,7 +255,16 @@ export async function normalizeContentFile(
 ): Promise<string[]> {
   const raw = await readRawContentFile(root, relPath);
   if (raw.fixes.length === 0) return [];
-  await writeContentFile(root, raw.relPath, raw.data, raw.body);
+
+  const bodyFixes = raw.fixes.filter((fix) => fix === 'removed BOM');
+  const metaFixes = raw.fixes.filter((fix) => fix !== 'removed BOM');
+
+  if (metaFixes.length > 0 && raw.metaExists) {
+    await writeMetadataFile(root, raw.relPath, raw.data);
+  }
+  if (bodyFixes.length > 0) {
+    await writeBodyFile(root, raw.relPath, raw.body, { ensureTrailingNewline: false });
+  }
   return raw.fixes;
 }
 

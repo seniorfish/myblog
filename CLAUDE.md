@@ -4,7 +4,7 @@
 
 - 先读 `AGENTS.md`、`ARCHITECTURE.md`、`core/contract.ts`。
 - 代码注释、变量名、提交信息用英文；文档与 UI 文案用中文。
-- 内容 frontmatter 不允许手写日期；时间来自 Git 与链上锚定。
+- 元数据（`content/*.meta.yml`）不允许手写日期；时间来自 Git 与链上锚定。`.md` 只放正文。
 - `main` 保持线性历史；不要制造 merge commit。
 - 主题工作只在 `theme/<id>` 分支的 `src/`、`public/`、`theme.contract.json`、可选 `theme.package.json` 中进行。
 - 不要修改 `src/generated/`、`build/`、`dist/`、`.worktrees/`。

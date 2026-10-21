@@ -3,16 +3,16 @@ import type { ChatMessage } from './client.ts';
 import type { FrontmatterField, LanguageMode, LanguageOutput } from './schemas.ts';
 import { tagStatsText, type AiContext } from './context.ts';
 
-function currentFrontmatter(target: RawContentFile): string {
+function currentMetadata(target: RawContentFile): string {
   return JSON.stringify(target.data, null, 2);
 }
 
 function targetBlock(target: RawContentFile): string {
   return [
     `<target file="${target.relPath}">`,
-    '<current_frontmatter>',
-    currentFrontmatter(target),
-    '</current_frontmatter>',
+    '<current_metadata>',
+    currentMetadata(target),
+    '</current_metadata>',
     '<body>',
     target.body,
     '</body>',
@@ -26,7 +26,7 @@ export function buildFrontmatterMessages(
   fields: FrontmatterField[],
 ): ChatMessage[] {
   const system = [
-    'You are a careful frontmatter assistant for a Chinese personal blog.',
+    'You are a careful metadata assistant for a Chinese personal blog.',
     'Return exactly one JSON object. Do not wrap it in Markdown fences. Do not explain.',
     '',
     'Allowed output keys: tags, title, description, extends, url, reasons.',
@@ -107,7 +107,7 @@ export function buildLanguageMessages(
     '',
     'Safety rules:',
     '- Do not add facts, opinions, names, numbers, links, or claims that are not in the original body.',
-    '- Do not modify YAML frontmatter.',
+    '- Do not modify YAML metadata or add a frontmatter block.',
     '- Do not modify fenced code blocks, inline code, HTML, or link URLs.',
     '- Preserve Markdown structure, headings, lists, tables, and blockquotes.',
     '- Keep the author’s voice; do not over-edit.',

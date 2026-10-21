@@ -23,6 +23,11 @@ async function commitAll(message: string, date: string): Promise<string> {
   return git(['rev-parse', 'HEAD']);
 }
 
+async function writeNode(id: string, meta: string, body: string): Promise<void> {
+  await writeFile(path.join(repo, 'content', `${id}.md`), body);
+  await writeFile(path.join(repo, 'content', `${id}.meta.yml`), meta);
+}
+
 function testConfig(chainEnabled = true): SiteConfig {
   return {
     title: 'Test Blog',
@@ -59,9 +64,10 @@ beforeEach(async () => {
   git(['config', 'user.email', 'tester@example.com']);
   git(['config', 'core.autocrlf', 'false']);
   await mkdir(path.join(repo, 'content'), { recursive: true });
-  await writeFile(
-    path.join(repo, 'content', 'hello.md'),
-    '---\ntags: 文章 建站\ntitle: Test Node\ndescription: A test node.\n---\n\nHello **world**.\n',
+  await writeNode(
+    'hello',
+    'tags: 文章 建站\ntitle: Test Node\ndescription: A test node.\n',
+    'Hello **world**.\n',
   );
 });
 
@@ -124,13 +130,14 @@ describe('compileSite', () => {
     await access(path.join(outDir, 'search-index.json'));
     await access(path.join(outDir, 'raw/hello.md'));
     await access(path.join(outDir, 'build-meta.json'));
+
+    const raw = await readFile(path.join(outDir, 'raw/hello.md'), 'utf8');
+    expect(raw.startsWith('---')).toBe(false);
+    expect(raw).toContain('Hello **world**.');
   });
 
   it('renders the homepage node at / and keeps it out of feeds', async () => {
-    await writeFile(
-      path.join(repo, 'content', 'home.md'),
-      '---\ntags: 首页\ntitle: Home Intro\ndescription: Hello.\n---\n\nWelcome home.\n',
-    );
+    await writeNode('home', 'tags: 首页\ntitle: Home Intro\ndescription: Hello.\n', 'Welcome home.\n');
     await commitAll('home', '2024-01-02T00:00:00Z');
 
     const outDir = path.join(repo, 'out');
@@ -159,14 +166,8 @@ describe('compileSite', () => {
   });
 
   it('rejects multiple homepage nodes', async () => {
-    await writeFile(
-      path.join(repo, 'content', 'home-a.md'),
-      '---\ntags: 首页\n---\nA\n',
-    );
-    await writeFile(
-      path.join(repo, 'content', 'home-b.md'),
-      '---\ntags: 首页\n---\nB\n',
-    );
+    await writeNode('home-a', 'tags: 首页\n', 'A\n');
+    await writeNode('home-b', 'tags: 首页\n', 'B\n');
     await commitAll('homes', '2024-01-02T00:00:00Z');
 
     const result = await compileSite({
@@ -194,13 +195,42 @@ describe('compileSite', () => {
     expect(first.buildMeta?.contentHash).toBe(second.buildMeta?.contentHash);
   });
 
+  it('does not create a new article revision when only metadata changes', async () => {
+    await commitAll('first', '2024-01-01T00:00:00Z');
+    const outDir = path.join(repo, 'out');
+
+    const first = await compileSite({ root: repo, outDir, config: testConfig(false) });
+    const firstNode = first.siteData?.nodes.find((node) => node.id === 'hello');
+    expect(firstNode).toBeDefined();
+    const firstRevision = firstNode!.revisions[0]!;
+    const firstRevisionCount = firstNode!.revisions.length;
+
+    // Change only the sidecar: tags move from 文章 to 想法.
+    await writeNode(
+      'hello',
+      'tags: 想法 建站\ntitle: Test Node\ndescription: A test node.\n',
+      'Hello **world**.\n',
+    );
+    await commitAll('retag', '2024-01-02T00:00:00Z');
+
+    const second = await compileSite({ root: repo, outDir, config: testConfig(false) });
+    const secondNode = second.siteData?.nodes.find((node) => node.id === 'hello');
+
+    expect(second.ok).toBe(true);
+    expect(secondNode?.primaryTag).toBe('想法');
+    expect(secondNode?.revisions).toHaveLength(firstRevisionCount);
+    expect(secondNode?.revisions[0]?.commit).toBe(firstRevision.commit);
+    expect(secondNode?.revisions[0]?.fileSha256).toBe(firstRevision.fileSha256);
+    expect(first.buildMeta?.buildId).not.toBe(second.buildMeta?.buildId);
+  });
+
   it('rejects merge commits', async () => {
     await commitAll('base', '2024-01-01T00:00:00Z');
     git(['checkout', '-b', 'feature']);
-    await writeFile(path.join(repo, 'content', 'feature.md'), '---\ntags: 文章\n---\nfeature\n');
+    await writeNode('feature', 'tags: 文章\n', 'feature\n');
     const feature = await commitAll('feature', '2024-01-02T00:00:00Z');
     git(['checkout', 'main']);
-    await writeFile(path.join(repo, 'content', 'main.md'), '---\ntags: 文章\n---\nmain\n');
+    await writeNode('main', 'tags: 文章\n', 'main\n');
     await commitAll('main', '2024-01-03T00:00:00Z');
     git(['merge', '--no-ff', feature, '-m', 'merge'], {
       GIT_AUTHOR_DATE: '2024-01-04T00:00:00Z',
