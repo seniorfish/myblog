@@ -2,35 +2,153 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'theme/**'
   workflow_dispatch:
   schedule:
-    # Every 30 minutes, offset from the hour to avoid fleet-wide spikes.
-    - cron: '7,37 * * * *'
+    # Daily safety net; the 30-minute polling loop was removed.
+    - cron: '17 3 * * *'
 
 permissions:
   contents: read
 
-concurrency:
-  group: blog-build
-  cancel-in-progress: true
-
 jobs:
-  build:
+  changed:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    permissions:
+      contents: read
+    concurrency:
+      group: blog-changed
+      cancel-in-progress: true
+    outputs:
+      content: ${{ steps.detect.outputs.content }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
-      - name: Fetch theme branches and blockchain notes
+      - name: Detect content changes
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "content=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "content=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "content=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- content; then
+            echo "content=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "content=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  contracts:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: blog-contracts
+      cancel-in-progress: true
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.8.5
+
+      - name: Test anchor contracts
+        run: forge test --root contracts -vvv
+
+  anchor:
+    needs: [changed, contracts]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.changed.outputs.content == 'true' &&
+      needs.contracts.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment: anchor
+    concurrency:
+      group: blog-anchor
+      cancel-in-progress: false
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch anchors branch
+        run: git fetch origin '+refs/heads/anchors:refs/remotes/origin/anchors' || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+
+      - name: Install compiler dependencies
+        run: npm ci
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.8.5
+
+      - name: Anchor pushed commit
+        env:
+          ANCHOR_PRIVATE_KEY: ${{ secrets.ANCHOR_PRIVATE_KEY }}
+          ANCHOR_RPC_URL: ${{ vars.ANCHOR_RPC_URL || 'https://base-rpc.publicnode.com' }}
+        run: |
+          npm run blog -- anchor \
+            --commit "$GITHUB_SHA" \
+            --yes --json \
+            --private-key-env ANCHOR_PRIVATE_KEY \
+            --rpc-url "$ANCHOR_RPC_URL" \
+            --author-name "github-actions[bot]" \
+            --author-email "41898282+github-actions[bot]@users.noreply.github.com"
+
+  build:
+    needs: [changed, anchor]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: blog-build
+      cancel-in-progress: true
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch theme and anchors branches
         run: |
           git fetch --prune origin \
             '+refs/heads/theme/*:refs/remotes/origin/theme/*' \
-            '+refs/notes/*:refs/notes/*' || true
+            '+refs/heads/anchors:refs/remotes/origin/anchors' || true
 
       - name: Set up Node
         uses: actions/setup-node@v4

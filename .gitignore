@@ -23,6 +23,8 @@ dist/
 # Foundry
 contracts/out/
 contracts/cache/
+/out/
+/cache/
 
 # Editor / OS noise
 .DS_Store
