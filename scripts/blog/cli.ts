@@ -14,6 +14,7 @@ import { openInEditor } from '../shared/editor.ts';
 import { slugify } from '../shared/slug.ts';
 import { pullFfOnly } from '../shared/git-cli.ts';
 import { planCommit, commitCandidate, createTemplateFile, push, renameTemplate } from './actions.ts';
+import { anchorCommit } from './anchor.ts';
 import {
   describeCandidate,
   gatherBlogState,
@@ -850,10 +851,101 @@ const doctorCommand = defineCommand({
 });
 
 const anchorCommand = defineCommand({
-  meta: { name: 'anchor', description: '在 Base Sepolia 上锚定提交（M3，未实现）。' },
-  run() {
-    console.error('M3 anchoring is not implemented yet.');
-    process.exitCode = 2;
+  meta: {
+    name: 'anchor',
+    description: '在 Base 主网上锚定一个 commit（写事件 + 更新 anchors 分支）。',
+  },
+  args: {
+    commit: { type: 'string', default: 'HEAD' },
+    rpcUrl: { type: 'string' },
+    contract: { type: 'string' },
+    keystore: { type: 'string' },
+    account: { type: 'string' },
+    passwordFile: { type: 'string' },
+    privateKeyEnv: { type: 'string' },
+    confirmations: { type: 'string' },
+    dryRun: { type: 'boolean', default: false },
+    recoverOnly: { type: 'boolean', default: false },
+    forceResend: { type: 'boolean', default: false },
+    allowAnyCommit: { type: 'boolean', default: false },
+    keepWorktree: { type: 'boolean', default: false },
+    noPush: { type: 'boolean', default: false },
+    authorName: { type: 'string' },
+    authorEmail: { type: 'string' },
+    yes: { type: 'boolean', default: false },
+    json: { type: 'boolean', default: false },
+  },
+  async run({ args }) {
+    const json = Boolean(args.json);
+    const fail = (message: string, code = 1): void => {
+      if (json) {
+        process.stdout.write(`${JSON.stringify({ ok: false, error: message }, null, 2)}\n`);
+      } else {
+        console.error(message);
+      }
+      process.exitCode = code;
+    };
+
+    if (!args.dryRun && !args.recoverOnly && !args.yes) {
+      fail('拒绝在未确认的情况下锚定；请加 --yes，或使用 --dry-run/--recover-only。', 2);
+      return;
+    }
+
+    let confirmations: number | undefined;
+    if (args.confirmations !== undefined) {
+      confirmations = Number(args.confirmations);
+      if (!Number.isInteger(confirmations) || confirmations < 1) {
+        fail('--confirmations 必须是正整数。', 2);
+        return;
+      }
+    }
+
+    try {
+      const result = await anchorCommit({
+        root: process.cwd(),
+        env: process.env,
+        commit: args.commit,
+        auth: {
+          keystore: args.keystore,
+          account: args.account,
+          passwordFile: args.passwordFile,
+          privateKeyEnv: args.privateKeyEnv,
+        },
+        rpcUrl: args.rpcUrl,
+        contract: args.contract,
+        confirmations,
+        dryRun: Boolean(args.dryRun),
+        recoverOnly: Boolean(args.recoverOnly),
+        forceResend: Boolean(args.forceResend),
+        allowAnyCommit: Boolean(args.allowAnyCommit),
+        keepWorktree: Boolean(args.keepWorktree),
+        noPush: Boolean(args.noPush),
+        authorName: args.authorName,
+        authorEmail: args.authorEmail,
+      });
+
+      if (json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      } else {
+        const labels: Record<string, string> = {
+          anchored: '已锚定',
+          recovered: '已从链上回填',
+          skipped: '已存在，跳过',
+          'would-anchor': '待锚定（dry-run）',
+          'not-found': '链上未找到',
+        };
+        console.log(`${labels[result.action] ?? result.action}: ${result.commitShort}`);
+        if (result.tx) console.log(`tx: ${result.tx}`);
+        if (result.block !== undefined) console.log(`block: ${result.block}`);
+        if (result.explorerUrl) console.log(`explorer: ${result.explorerUrl}`);
+        if (result.pushed) console.log('anchors 分支已推送');
+        for (const warning of result.warnings) console.error(`warning: ${warning}`);
+      }
+
+      process.exitCode = result.ok ? 0 : 1;
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error), 1);
+    }
   },
 });
 
