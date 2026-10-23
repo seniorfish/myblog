@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { createStaticServer } from './serve.ts';
@@ -10,6 +10,30 @@ if (!existsSync(path.join(distDir, 'manifest.json'))) {
   console.error('dist/manifest.json is missing. Run `npm run build:all` first.');
   process.exit(1);
 }
+
+const siteData = JSON.parse(
+  readFileSync(path.join(root, 'build', 'generated', 'site-data.json'), 'utf8'),
+) as {
+  site: { title: string };
+  homeNodeId?: string;
+  nodes: Array<{
+    id: string;
+    url: string;
+    title?: string;
+    displayTitle?: string;
+    externalUrl?: string;
+  }>;
+};
+
+const offlineNode = siteData.nodes.find(
+  (node) =>
+    node.id !== siteData.homeNodeId &&
+    !node.externalUrl &&
+    Boolean(node.title ?? node.displayTitle),
+);
+const offlinePath = offlineNode?.url ?? '/';
+const offlineExpectedTitle =
+  offlineNode?.title ?? offlineNode?.displayTitle ?? siteData.site.title;
 
 const chromePath =
   process.env.CHROME_PATH ??
@@ -108,7 +132,7 @@ try {
   }
 
   await context.setOffline(true);
-  await page.goto(`${server.url}/n/hello`, {
+  await page.goto(`${server.url}${offlinePath}`, {
     waitUntil: 'domcontentloaded',
     timeout: 20_000,
   });
@@ -122,8 +146,8 @@ try {
   if (offlineTheme !== 'terminal') {
     throw new Error('offline navigation lost the active theme');
   }
-  if (!offlineTitle.includes('构建面向 AI Agent')) {
-    throw new Error('offline content is missing');
+  if (!offlineTitle.includes(offlineExpectedTitle)) {
+    throw new Error(`offline content is missing (expected title: ${offlineExpectedTitle})`);
   }
 
   await context.setOffline(false);

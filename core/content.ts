@@ -41,13 +41,22 @@ export interface DiscoverResult {
   issues: CompileIssue[];
 }
 
+/** Ignore editor/tooling directories such as `.ipynb_checkpoints`. */
+export function isIgnoredContentPath(relative: string): boolean {
+  return relative
+    .split('/')
+    .some((segment) => segment.startsWith('.') && segment.length > 0);
+}
+
 export async function discoverContent(root: string): Promise<DiscoverResult> {
   const contentDir = path.join(root, 'content');
   const issues: CompileIssue[] = [];
 
   let names: string[];
   try {
-    names = (await readdir(contentDir, { recursive: true })).map(toPosixPath);
+    names = (await readdir(contentDir, { recursive: true }))
+      .map(toPosixPath)
+      .filter((name) => !isIgnoredContentPath(name));
   } catch {
     return {
       entries: [],

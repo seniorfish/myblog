@@ -15,6 +15,14 @@ dist/
 .env.*
 *.keystore
 *.password
+*.pass
+
+# Jupyter / editor checkpoints
+.ipynb_checkpoints/
+
+# Foundry
+contracts/out/
+contracts/cache/
 
 # Editor / OS noise
 .DS_Store

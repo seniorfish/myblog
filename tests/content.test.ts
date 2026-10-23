@@ -84,4 +84,17 @@ describe('discoverContent', () => {
     expect(result.issues).toEqual([]);
     expect(result.entries[0]?.id).toBe('notes/a');
   });
+
+  it('ignores dot-directories such as Jupyter checkpoints', async () => {
+    const root = await tempRoot();
+    await mkdir(path.join(root, 'content', '.ipynb_checkpoints'), { recursive: true });
+    await writeFile(path.join(root, 'content', '.ipynb_checkpoints', 'draft.md'), '旧稿\n');
+    await writeFile(path.join(root, 'content', 'hello.md'), '正文\n');
+    await writeFile(path.join(root, 'content', 'hello.meta.yml'), 'tags: 文章\n');
+
+    const result = await discoverContent(root);
+
+    expect(result.issues).toEqual([]);
+    expect(result.entries.map((entry) => entry.id)).toEqual(['hello']);
+  });
 });
