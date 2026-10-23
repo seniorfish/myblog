@@ -672,6 +672,65 @@ button {
   font-size: 0.68rem;
 }
 
+.revision-commit,
+.revision-blob a,
+.revision-anchor a,
+.revision-verify a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 0.15em;
+}
+
+.revision-commit {
+  text-decoration: none;
+}
+
+.revision-commit:hover,
+.revision-blob a:hover,
+.revision-anchor a:hover,
+.revision-verify a:hover {
+  color: var(--text);
+}
+
+.revision-blob {
+  margin: 0.2rem 0 0;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.revision-verify {
+  margin: 0.45rem 0 0;
+  color: var(--faint);
+  font-size: 0.78rem;
+}
+
+.revision-verify summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.revision-verify summary:hover {
+  color: var(--text);
+}
+
+.revision-verify ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.revision-verify li {
+  margin: 0.25rem 0;
+}
+
+.revision-verify code,
+.revision-blob code {
+  overflow-wrap: anywhere;
+}
+
 .revision-diff {
   margin: 0.6rem 0 0;
   padding: 0.6rem 0.75rem;

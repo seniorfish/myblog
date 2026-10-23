@@ -29,13 +29,23 @@ const formatter = new Intl.DateTimeFormat('zh-CN', {
 const formatTime = (timestamp: number | null | undefined): string =>
   timestamp ? formatter.format(new Date(timestamp * 1000)) : '—';
 
+const githubBase = `https://github.com/${site.repo}`;
+const apiBase = `https://api.github.com/repos/${site.repo}`;
+const commitUrl = (commit: string): string => `${githubBase}/commit/${commit}`;
+const blobUrl = (commit: string, filePath: string): string =>
+  `${githubBase}/blob/${commit}/${encodeURI(filePath)}`;
+const apiUrl = (commit: string, filePath: string): string =>
+  `${apiBase}/contents/${encodeURI(filePath)}?ref=${commit}`;
+const shortAddress = (address: string): string =>
+  `${address.slice(0, 8)}…${address.slice(-6)}`;
+
 const statusDetail = node.isVerified
   ? `锚定于 ${formatTime(latest?.verifiedAt)}${
       latest?.anchor ? ` · block #${latest.anchor.blockNumber}` : ''
     }`
   : hasAnyAnchor
     ? `当前版本待锚定 · 上次锚定于 ${formatTime(node.updatedAt)}`
-    : 'M1 未启用链上存证；时间来自 Git 提交。';
+    : '尚无锚定记录；时间来自 Git 提交。';
 
 const lineClass = (line: string): string => {
   if (line.startsWith('+') && !line.startsWith('+++')) return 'diff-add';
@@ -54,54 +64,113 @@ const lineClass = (line: string): string => {
 
   <ol class="revision-list">
     {
-      node.revisions.map((revision, index) => (
-        <li>
-          <div class="revision-head">
-            <span class="revision-index">
-              {index === 0 ? '当前版本' : `第 ${node.revisions.length - index} 次修改`}
-            </span>
-            <code>{revision.shortCommit || '未提交'}</code>
-            <time datetime={new Date(revision.gitTimestamp * 1000).toISOString()}>
-              {formatTime(revision.gitTimestamp)}
-            </time>
-          </div>
-
-          <p class="revision-message">{revision.message}</p>
-
-          {revision.verifiedAt ? (
-            <p class="revision-anchor">
-              锚定于 {formatTime(revision.verifiedAt)}
-              {revision.anchor?.explorerUrl && (
-                <>
-                  {' · '}
-                  <a
-                    href={revision.anchor.explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    交易 {revision.anchor.txHash.slice(0, 10)}… ↗
-                  </a>
-                </>
+      node.revisions.map((revision, index) => {
+        const anchor = revision.anchor;
+        const commit = revision.commit;
+        return (
+          <li>
+            <div class="revision-head">
+              <span class="revision-index">
+                {index === 0 ? '当前版本' : `第 ${node.revisions.length - index} 次修改`}
+              </span>
+              {commit ? (
+                <a
+                  class="revision-commit"
+                  href={commitUrl(commit)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <code>{revision.shortCommit}</code>
+                </a>
+              ) : (
+                <code>未提交</code>
               )}
-            </p>
-          ) : (
-            <p class="revision-anchor">未锚定</p>
-          )}
+              <time datetime={new Date(revision.gitTimestamp * 1000).toISOString()}>
+                {formatTime(revision.gitTimestamp)}
+              </time>
+            </div>
 
-          {revision.diff && (
-            <pre class="revision-diff">
-              <code>
-                {revision.diff.split('\n').map((line) => (
-                  <span class={lineClass(line)}>
-                    {line}
-                    {'\n'}
-                  </span>
-                ))}
-              </code>
-            </pre>
-          )}
-        </li>
-      ))
+            <p class="revision-message">{revision.message}</p>
+
+            {commit && revision.gitBlobSha1 && (
+              <p class="revision-blob">
+                blob SHA-1 <code>{revision.gitBlobSha1}</code>
+                {' · '}
+                <a
+                  href={apiUrl(commit, node.git.path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  GitHub API ↗
+                </a>
+              </p>
+            )}
+
+            {anchor ? (
+              <p class="revision-anchor">
+                锚定于 {formatTime(revision.verifiedAt)}
+                {' · '}
+                <a href={anchor.explorerUrl} target="_blank" rel="noopener noreferrer">
+                  交易 {anchor.txHash.slice(0, 10)}… ↗
+                </a>
+                {' · '}
+                <a href={anchor.contractExplorerUrl} target="_blank" rel="noopener noreferrer">
+                  合约 {shortAddress(anchor.contract)} ↗
+                </a>
+                {' · '}
+                <a href={anchor.senderExplorerUrl} target="_blank" rel="noopener noreferrer">
+                  签名 {shortAddress(anchor.sender)} ↗
+                </a>
+              </p>
+            ) : (
+              <p class="revision-anchor">未锚定</p>
+            )}
+
+            {anchor && commit && (
+              <details class="revision-verify">
+                <summary>三步核验</summary>
+                <ol>
+                  <li>
+                    链上：打开<a href={anchor.explorerUrl} target="_blank" rel="noopener noreferrer">
+                      交易
+                    </a>，确认 <code>Anchored</code> 事件的 sender 与 commit。
+                  </li>
+                  <li>
+                    GitHub：打开
+                    <a href={commitUrl(commit)} target="_blank" rel="noopener noreferrer">
+                      commit {revision.shortCommit}
+                    </a>
+                    与
+                    <a href={blobUrl(commit, node.git.path)} target="_blank" rel="noopener noreferrer">
+                      这一版正文
+                    </a>
+                    ，确认内容一致。
+                  </li>
+                  <li>
+                    比对：<a href={apiUrl(commit, node.git.path)} target="_blank" rel="noopener noreferrer">
+                      GitHub API
+                    </a>
+                    返回的 <code>sha</code> 应与上面的 <code>{revision.gitBlobSha1}</code> 一致。
+                  </li>
+                </ol>
+              </details>
+            )}
+
+            {revision.diff && (
+              <pre class="revision-diff">
+                <code>
+                  {revision.diff.split('\n').map((line) => (
+                    <span class={lineClass(line)}>
+                      {line}
+                      {'\n'}
+                    </span>
+                  ))}
+                </code>
+              </pre>
+            )}
+          </li>
+        );
+      })
     }
   </ol>
 </details>
