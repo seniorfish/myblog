@@ -2,12 +2,12 @@
 
 一个面向 AI 主题生成、Git/链上时间戳与本地优先体验的个人博客。
 
-当前状态：**M1 + M2 已完成**。
+当前状态：**M1 + M2 已完成；M3 链上锚定已接入**。
 
 - M1：内容编译器、默认主题、本地开发与静态构建。
 - M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
 - 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件元数据 / 语言优化）。
-- M3（未实现）：Base Sepolia 链上锚定、R2 图床、Cloudflare Pages 部署。
+- M3 链上存证：Base 主网事件合约 + `anchors` 分支索引 + CI 自动锚定（已完成）；R2 图床与 Cloudflare Pages 部署待做。
 
 ## 快速开始
 
@@ -52,14 +52,20 @@ npm run blog -- save content/new-blog.md
 npm run blog -- pull
 npm run blog -- push --yes
 
+npm run blog -- anchor --commit <sha> --dry-run --json
+npm run blog -- anchor --commit <sha> --yes --json
+npm run blog -- anchor --commit <sha> --recover-only --no-push --json
+
 npm run ai -- frontmatter content/new-blog.md --fields tags,description --json
 npm run ai -- frontmatter content/new-blog.md --fields tags,description --write
 npm run ai -- slug content/new-blog.md --json
 npm run ai -- slug content/new-blog.md --write
 npm run ai -- slug content/new-blog.md --id bing-shan --write
-npm run ai -- language content/hello.md --mode proofread --output advice --json
-npm run ai -- language content/hello.md --mode concise --output rewrite --write
+npm run ai -- language content/foo.md --mode proofread --output advice --json
+npm run ai -- language content/foo.md --mode concise --output rewrite --write
 ```
+
+`npm run blog -- anchor` 默认只做预检或从链上事件回填；`--yes` 才会真正发交易。CI 在 `content/` 推送时自动完成锚定。
 
 `npm run ai -- slug` 会把中文标题/正文转成拼音或英文 slug。id 只允许 ASCII，纯中文标题直接用 `slugify` 会退化为 `post-xxxxxxxx`；`--write` 会同时重命名 `.md` 与 `.meta.yml`，`--id` 可跳过 AI 手动指定。
 
@@ -110,7 +116,7 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 - `content/home.md`（主 Tag `首页`，可在 `site.config.ts` 的 `homeTag` 修改）渲染在 `/`，用来写自我介绍。
 - 全站只能有一个已发布的首页节点；它会从索引、RSS、sitemap、搜索中排除。
 - 文章索引在 `/archive`，页头有“索引”链接。
-- 首页节点不生成 `/n/{id}` 详情页，但仍保留 raw/proof 存证产物。
+- 首页节点不生成 `/n/{id}` 详情页；存证信息在页面底部的修订框里。
 
 ## Service Worker 更新
 
@@ -157,7 +163,7 @@ manifest.json                        # releaseId + 主题元数据
 sw.js                                # Service Worker
 _sys/sys.js                          # 主题 dock + SW 注册
 _headers                             # Cloudflare Pages 缓存策略
-raw/ proof/ search-index.json        # 共享文本产物（raw 为纯正文）
+search-index.json                    # 共享搜索索引
 ```
 
 浏览器首次加载默认主题；Service Worker 激活后，右下角出现 `Themes` 胶囊。切换主题时 URL 不变，SW 从本地 VFS 返回目标主题的 HTML/CSS/JS。已缓存过的站内导航与断网导航都不需要网络。
@@ -193,7 +199,7 @@ dist/             最终部署产物（gitignore）
 
 ## 离线与缓存边界
 
-- 离线保证 HTML/CSS/JS、raw、proof、search-index 等**文本**可用。
+- 离线保证 HTML/CSS/JS、search-index 等**文本**可用。
 - R2 图片只有被访问过才在本地缓存（M3）。
 - 更新检查是**惰性**的：只在导航/页面可见时执行，且距上次检查至少 30 分钟；SW 休眠时不保证按时轮询。
 - VFS 单文件硬上限 25MB（Cloudflare Pages）；初期约 110KB/主题。
@@ -201,16 +207,25 @@ dist/             最终部署产物（gitignore）
 ## 内容与时间
 
 - 内容只写标准 Markdown；每篇正文旁边有一个同名 `.meta.yml`，至少要有 `tags`。
-- **不允许手写日期**。时间来自 Git 提交；链上锚定在 M3 接入后，以区块时间为权威。
+- **不允许手写日期**。时间来自 Git 提交；已锚定版本以区块时间为权威。
 - 主 Tag 决定形态：`文章`、`想法`、`闪念`、`收藏`，也允许未来任意新 Tag；没有专门样式时自动回退。
 - 新进展通过 `extends` 新建节点，不直接改写旧文章。
 
 详见 [CONTENT.md](CONTENT.md)。
 
+## 链上存证
+
+- 合约：Base 主网 `0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4`，只发 `Anchored(address indexed sender, bytes32 indexed commit)` 事件。
+- 索引：`anchors` 孤儿分支的 `anchors.ndjson`；构建离线读取，页面显示 tx / 合约 / 签名地址 / Git blob SHA-1。
+- CI 在 `content/` 推送时自动锚定；只有 anchor job 读 Environment secret `ANCHOR_PRIVATE_KEY`。
+- 本地：`--dry-run` 只预检；`--recover-only` 从链上事件回填索引；`--yes` 才发交易。
+- 三步核验：链上事件 → GitHub commit/文件 → 比对 blob SHA-1。私有仓库阶段 GitHub 链接对外 404，公开后才完整。
+
 ## 设计文档
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构、M1/M2 实现、M3 接口与边界。
+- [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构、M1/M2 实现、M3 实现与边界。
 - [AGENTS.md](AGENTS.md)：给未来 AI 的工作约束。
+- [contracts/README.md](contracts/README.md)：事件合约、部署记录与 commit 补零约定。
 - [THEME_AGENT_PROMPT.md](THEME_AGENT_PROMPT.md)：新主题的复制即用提示词。
 
 ## 语言约定
@@ -220,4 +235,4 @@ dist/             最终部署产物（gitignore）
 
 ## 安全
 
-私钥、助记词与 keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。链上锚定使用本机专用 burner 钱包的加密 keystore，详见 `ARCHITECTURE.md`。
+私钥、助记词与 keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。开发时用本机加密 keystore；CI 只在 anchor job 的 Environment secret 里保存 burner 私钥，build job 不接触 secret。详见 `ARCHITECTURE.md` 与 `contracts/README.md`。

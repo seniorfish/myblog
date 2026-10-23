@@ -74,7 +74,7 @@ AI 补全规则：
 
 - 全站只能有**一个已发布**的节点使用 `site.config.ts` 里的 `homeTag`（默认 `首页`）；多个会让编译失败。
 - 它渲染在 `/`，并从索引 `/archive`、RSS、sitemap、搜索中排除。
-- 首页节点不生成 `/n/{id}` 详情页；它的 `raw/` 与 `proof/` 仍会生成。
+- 首页节点不生成 `/n/{id}` 详情页；存证信息在页面底部的修订框里。
 - 首页内容用标准 Markdown，建议写自我介绍、正在做的事和常用链接。
 - 首页页脚会自动带上该节点的“修订与存证”折叠框。
 
@@ -103,11 +103,11 @@ title: 构建面向 AI Agent 的个人博客
 
 # 想法：短卡片；正文不超过 400 字时首页直接展开（content/thought.meta.yml）
 tags: 想法 硬件 树莓派
-extends: pi-intro
+extends: parent-id
 
 # 闪念：单行；首页整条内联（content/flash.meta.yml）
 tags: 闪念 日常
-extends: pi-cooling-thought
+extends: parent-id
 
 # 收藏：外链卡片（content/bookmark.meta.yml）
 tags: 收藏 工具
@@ -122,13 +122,13 @@ url: https://www.raspberrypi.com/documentation/computers/raspberry-pi.html
 编辑只用于勘误；新的体会新建一个节点，用 `extends` 指向旧节点：
 
 ```yaml
-# content/pi-cooling.meta.yml
+# content/child-id.meta.yml
 tags: 想法 硬件 树莓派
-extends: pi-intro
+extends: parent-id
 ```
 
 ```markdown
-<!-- content/pi-cooling.md -->
+<!-- content/child-id.md -->
 换了铜片散热之后，连续编译十分钟温度从 82 度降到 67 度。
 ```
 
@@ -163,12 +163,14 @@ npm run dev
 npm run media ./screenshot.png
 ```
 
-脚本会转 WebP、按 SHA-256 命名、上传 Cloudflare R2，并输出可粘贴的 Markdown 链接。当前 M1 请使用外链，或先不插图。
+脚本会转 WebP、按 SHA-256 命名、上传 Cloudflare R2，并输出可粘贴的 Markdown 链接。当前请使用外链，或先不插图。
 
 ## 时间显示
 
-M1 的时间来自 Git 提交时间；页面会明确显示“尚无链上锚定记录”。M3 接入链上锚定后，以区块时间为权威，并区分：
+时间来自 Git 提交；已锚定版本以区块时间为权威，并区分：
 
 - 当前版本已锚定；
 - 当前版本待锚定，上次锚定于 X；
 - 尚无任何锚定记录。
+
+已锚定的修订会显示 tx、合约与签名地址；页面还列出 Git blob SHA-1。访客可以按“链上事件 → GitHub commit/文件 → 比对 blob SHA-1”三步核验。私有仓库阶段 GitHub 链接对外 404，链上交易仍可查；公开后才完整。页面不再生成 `raw/` 与 `proof/`。

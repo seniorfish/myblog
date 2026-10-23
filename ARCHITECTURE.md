@@ -1,6 +1,6 @@
 # 架构说明
 
-本文记录 M1 的实际实现，以及 M2/M3 已经定下的接口与边界。目标是让未来的 AI 只读少量文件就能重写主题，而不会碰坏内容、时间与存证逻辑。
+本文记录 M1/M2 的实际实现，以及 M3 链上存证的实现与边界。目标是让未来的 AI 只读少量文件就能重写主题，而不会碰坏内容、时间与存证逻辑。
 
 ## 1. 核心原则
 
@@ -23,7 +23,7 @@ ParsedContent ──► buildTree() ──► parent / ancestors / children / ro
   ▼
 RenderedMarkdown (html / headings / plainText / excerpt / readingTime)
   │
-  │  git log --follow + git notes
+  │  git log --follow + anchors 分支 (anchors.ndjson)
   ▼
 RevisionProof[] ──► resolveAnchorTimes() ──► createdAt / updatedAt / displayTime
   │
@@ -32,8 +32,6 @@ SiteData ──► build/generated/
              ├─ site-data.json
              ├─ search-index.json
              ├─ rss.xml / sitemap.xml / robots.txt
-             ├─ raw/{id}.md
-             ├─ proof/{id}.json
              └─ build-meta.json
 ```
 
@@ -42,12 +40,13 @@ SiteData ──► build/generated/
 | 文件 | 职责 |
 | --- | --- |
 | `core/contract.ts` | 唯一数据契约；主题只能依赖它 |
-| `core/schema.ts` | 元数据、anchor note、theme.contract 的 Zod 校验 |
+| `core/schema.ts` | 元数据、anchor record、theme.contract 的 Zod 校验 |
 | `core/metadata.ts` | `.meta.yml` 路径、YAML 解析/序列化、字段顺序 |
 | `core/content.ts` | 成对发现 `.md` 正文与 `.meta.yml` 元数据 |
 | `core/markdown.ts` | Markdown → HTML；GFM、GitHub alerts、Shiki 双主题 |
 | `core/tree.ts` | `extends` 图；防断链/防环/别名；祖先与子节点 |
-| `core/git.ts` | `git log --follow`、blob、diff、notes、工作区状态 |
+| `core/git.ts` | `git log --follow`、blob、diff、anchors 分支、工作区状态 |
+| `core/anchor-index.ts` | `anchors.ndjson` 解析、commit 补零、记录过滤 |
 | `core/anchors.ts` | 锚定覆盖与节点时间推导 |
 | `core/build.ts` | 汇总 SiteData 并写出所有产物 |
 | `scripts/prepare-theme.ts` | 把 harness 与生成数据注入主题 worktree |
@@ -85,37 +84,36 @@ draft: false          # 可选
 
 ## 4. 时间与存证
 
-### M1
+### 时间来源
 
 - 每篇文章的修改历史来自 `git log --follow`。
-- 每个 revision 记录 commit、Git 时间、unified diff、该版本原始 `.md` 的 SHA-256。
+- 每个 revision 记录 commit、Git 时间、unified diff、该版本原始 `.md` 的 SHA-256 与 Git blob SHA-1。
 - 没有锚定时 `isVerified=false`；页面显示“尚无链上锚定记录”，排序使用最新 Git 时间。
 - 工作区有未提交修改或文件未跟踪时，页面会标注；CI 构建要求工作区干净。
 
-### M3（已定接口）
+### 链上锚定（M3）
 
-- 以 Git commit 为粒度，把 `BLOG_ANCHOR|repo:...|commit:<sha>` 写进 Base Sepolia 自转账 calldata。
-- 交易回执写入 `git notes --ref=blockchain`，不改变 commit hash。
-- 编译期按“线性扫描 + 最近锚定后代”推导 `verifiedAt`；`proof/{id}.json` 已按最终形态输出。
-- 签名使用本机专用 burner 钱包的加密 keystore：
-
-```powershell
-cast send <self> --from <address> --data 0x... `
-  --keystore <dir> --account blog-anchor --password-file <path> `
-  --rpc-url https://sepolia.base.org --async
-```
-
-keystore 与密码文件都在仓库外，脚本只拿路径，不读取内容。不使用 GitHub Actions 存放私钥。
+- 链：Base 主网（chainId 8453）；合约 `0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4`。
+- 合约只发事件，不存状态、没有 owner、不可升级：
+  `Anchored(address indexed sender, bytes32 indexed commit)`。
+- 以 commit 为粒度；Git SHA-1 是 20 字节，右补零到 `bytes32`。
+- 交易回执不写 `git notes`；索引放在孤儿分支 `anchors` 的 `anchors.ndjson`，作为构建的离线缓存。
+- 编译期读 `refs/heads/anchors` 或 `refs/remotes/origin/anchors`，按 chain/contract/sender/repo 过滤；构建不联网。
+- CI 在 `content/` 推送时自动锚定：anchor job 读 Environment secret `ANCHOR_PRIVATE_KEY`，build job 无 secret；`anchors` 分支可由链上事件重建。
+- 合约源码、测试与部署记录在 `contracts/`；事件 topic0 为
+  `0xee1610244dfc4b116b1433dd4459fd7b1d3d2bf737a05fc3f6d8f173005d7147`。
 
 ### 证明边界
 
-Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 commit hash。访客要验证“眼前文件属于该 commit”，必须从 GitHub 等来源取得 tree/blob 数据，再用本地 SHA-256 / Git blob SHA-1 比对。因此 M3 的 `sys-chain-proof` 做三级核验：
+链上只存 commit hash（事件/calldata），不存文件内容。Git commit 通过 tree/blob 密码学绑定内容，因此访客按三步核验：
 
-1. 链上 calldata 与页面的 anchor commit 匹配；
-2. GitHub 确认该 commit 的 tree 中存在该路径，并给出 blob SHA-1；
-3. 本地 raw 字节的 SHA-256 与 proof JSON 一致，Git blob SHA-1 与 GitHub blob SHA 一致。
+1. 链上：打开交易，确认 `Anchored` 事件的 sender 与 commit；
+2. GitHub：打开该 commit 与 `content/{id}.md`，确认是这一版正文；
+3. 比对：GitHub API 返回的 blob `sha` 与页面上的 `gitBlobSha1` 一致。
 
-这仍依赖 GitHub 的数据可用性。真正的 trustless 文件级证明需要把 `filesRoot` 写进 calldata 并附带 Merkle inclusion proof，列为后续增强。
+页面不再生成 `raw/` 与 `proof/`；核验信息由 `site-data.json` 里的 revisions 提供，主题负责渲染链接。私有仓库阶段 GitHub 链接对外 404，链上交易仍可查；公开后三步核验才完整。
+
+真正的 trustless 文件级证明需要把 `filesRoot` 写进 calldata 并附带 Merkle inclusion proof，列为后续增强。
 
 ## 5. 主题模型（混合模式）
 
@@ -141,7 +139,7 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 2. 用 esbuild 构建 `host/sys.ts` → `build/runtime/sys.js`、`sw/sw.ts` → `build/runtime/sw.js`。
 3. 发现 `refs/heads/theme/*` 与 `refs/remotes/origin/theme/*`；本地优先，CI 用远端 ref。
 4. 对每个主题：`prepare-theme` → `astro build` → 注入 `/_sys/sys.js` 与 `<sys-theme-dock>`。
-5. 打包 VFS、校验路由/资源/raw/proof/search（含 `/archive`；首页节点使用 `/`，不生成 `/n/home`），生成 manifest，组装 `dist/`。
+5. 打包 VFS、校验路由/资源/search（含 `/archive`；首页节点使用 `/`，不生成 `/n/home`），生成 manifest，组装 `dist/`。
 
 ### 6.2 VFS
 
@@ -151,11 +149,9 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
   "themeId": "terminal",
   "files": {
     "/": { "type": "text/html; charset=utf-8", "body": "..." },
-    "/n/hello": { "type": "text/html; charset=utf-8", "body": "..." },
+    "/n/iceberg": { "type": "text/html; charset=utf-8", "body": "..." },
     "/_astro/xxx.css": { "type": "text/css; charset=utf-8", "body": "..." },
     "/_sys/sys.js": { "type": "text/javascript; charset=utf-8", "body": "..." },
-    "/raw/hello.md": { "type": "text/markdown; charset=utf-8", "body": "..." },
-    "/proof/hello.json": { "type": "application/json; charset=utf-8", "body": "..." },
     "/search-index.json": { "type": "application/json; charset=utf-8", "body": "..." }
   }
 }
@@ -163,18 +159,20 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 
 - 路径归一化：`index.html` → `/`，`n/foo.html` → `/n/foo`，`404.html` → `/404`；非 ASCII 段用 `encodeURIComponent`。
 - 文件名 `/_themes/{id}.{vfsSha256}.vfs.json`；manifest 记录同一哈希。无哈希文件名不能设 `immutable`。
-- 体积硬上限 25MB/文件（Cloudflare Pages），5MB 起警告；当前每个主题约 110KB。
+- 体积硬上限 25MB/文件（Cloudflare Pages），5MB 起警告；当前每个主题约 113KB。
 
 ### 6.3 manifest 与 releaseId
 
 - `manifest.json`：`releaseId`、`contentHash`、`anchorsHash`、`defaultTheme`、`site`、`chain`、`themes[]`。
 - 每个主题：`id`、`displayName`、`model`、`description`、`author`、`isDefault`、`commit`、`updatedAt`、`vfsUrl`、`vfsSha256`、`sizeKB`。
 - `releaseId = SHA-256(contentHash, anchorsHash, 站点配置, 主题 commits + VFS hashes)`；**不包含构建时间**。
+- `anchorsHash` 去重后包含 chainId、contract、sender、tx、blockTimestamp；`manifest.chain` 带 `contract`/`deployBlock`/`address`。
 - 主题 HTML 里的 `__CONTENT_GIT_HASH__` 取“最后一次修改 `content/` 的提交”，因此只改文档/脚本不会让所有客户端重新下载。
 
 ### 6.4 宿主运行时
 
 - `host/sys.ts` 注册 `<sys-theme-dock>` 并注册 `/sw.js`。
+- 存证 UI 在主题的 `Revisions.astro`；host 只负责 dock/SW，不做链上核验。
 - 构建后注入每个主题 HTML：head 里的 `<script type="module" src="/_sys/sys.js">` 与 body 末尾的 `<sys-theme-dock>`；主题无需自己实现。
 - dock 通过 MessageChannel 与 SW 通信：`GET_STATE`、`SET_THEME`；显示主题列表、commit、cached 状态与更新提示。
 - 主题可通过 CSS 变量桥接配色：`--sys-bg`、`--sys-fg`、`--sys-muted`、`--sys-border`、`--sys-font`。
@@ -202,14 +200,14 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 
 - `npm run serve`：`scripts/serve.ts` 静态服务器（clean URL、SW 头、`_headers` 等价缓存头）。
 - `npm run test:e2e`：`playwright-core` + 本机 Chrome，验证“默认主题 → SW 接管 → 切 Terminal → URL 不变 → 断网导航”。
-- CI：`.github/workflows/build.yml` 在 main push / 手动 / 每 30 分钟构建，上传 `dist` artifact；不带 deploy，避免 build job 接触 Cloudflare token。`theme/*` push 不会自动触发 main 的 workflow。
+- CI：`.github/workflows/build.yml` 在 main / theme 分支 push、手动触发或每日兜底时构建；`content/` 变化时先由 anchor job 锚定，再由无密钥的 build job 构建并上传 `dist` artifact。`theme/*` push 现在会触发 workflow（checkout main 再 fetch 主题分支）。
 
 ## 7. M3：媒体与部署
 
 - 图片由 `scripts/upload-media.ts` 转 WebP/AVIF，按内容 SHA-256 命名，上传 Cloudflare R2（S3 兼容 API）。
 - 仓库只出现 `https://cdn.<domain>/<sha256>.webp`。
 - Cloudflare Pages 用 `wrangler pages deploy dist`；`_headers` 让 `manifest.json`/`sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 长缓存。
-- 生产前在 Base Sepolia 跑通“提交 → 锚定 → notes → 编译 → 浏览器核验”全流程，再切 Base 主网。
+- 生产前先用测试提交跑通“锚定 → anchors 分支 → 构建 → 页面三步核验”，再锚定正式文章；合约已在 Base 主网部署。
 
 ## 8. 已知边界
 
@@ -217,10 +215,10 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 - `git log --follow` 对 rename/evil merge 有边界；id 发布后不应改名，改名需写 `aliases`。
 - 博客短期 <100 篇，锚定覆盖使用最简单的 O(n) 线性扫描。
 - 主题源码是可信代码，但仍保持 build/deploy 分离，构建 job 不挂敏感 secret。
-- 一键核验依赖公开 GitHub 仓库；私有仓库时 `sys-chain-proof` 降级。
-- 离线只保证文本（HTML/CSS/JS/raw/proof/search）；R2 图片需被访问过才有本地缓存。
+- 三步核验依赖公开 GitHub 仓库；私有仓库阶段 GitHub 链接对外 404，链上交易仍可查。
+- 离线只保证文本（HTML/CSS/JS/search）；R2 图片需被访问过才有本地缓存。
 - 30 分钟更新检查是惰性的，SW 休眠时不保证按时轮询。
-- VFS 单文件硬上限 25MB；当前每主题约 110KB。接近上限时再拆共享 content shard 或做压缩。
+- VFS 单文件硬上限 25MB；当前每主题约 113KB。接近上限时再拆共享 content shard 或做压缩。
 - SW 只保留 active / previous / pending release；更老的 tab 可能加载不到旧哈希资源。
 - `npm run test:e2e` 依赖本机 Chrome，CI 只跑单元测试与 build:all 校验。
 - `sw.js`、`sys.js` 不参与 VFS 内容哈希；靠 `Cache-Control: no-cache` 让浏览器重新校验。
@@ -231,10 +229,11 @@ Git commit 通过 tree/blob 密码学绑定了文件内容，但链上只存 com
 
 | 命令 | 研究对象 | 负责 | 禁止 |
 | --- | --- | --- | --- |
-| `npm run blog` | 仓库 / Git / 文件 | 状态检查、模板、校验、commit、push、未来 anchor | 不改写正文语义 |
+| `npm run blog` | 仓库 / Git / 文件 | 状态检查、模板、校验、commit、push、anchor | 不改写正文语义 |
 | `npm run ai` | 单个 `.md` + `.meta.yml` | 元数据建议、id（slug）建议与改名、语言建议/改写、未来翻译 | 不执行 Git 写操作 |
 
 - `scripts/blog/state.ts` 采集 Git 与内容状态；`blocking` 直接阻止，`decision` 交给交互层，安全机械问题由 `scripts/shared/content-file.ts` 修复。
+- `npm run blog -- anchor --dry-run --commit <sha> --json` 只读预检；`--recover-only` 从链上事件回填 `anchors` 索引；`--yes` 才会发交易。
 - `scripts/blog/cli.ts` 用 `@clack/prompts` 做交互、`citty` 做子命令。非交互模式始终提供 `--json`，遇到需要决策的情况返回非零退出码而不是猜测。
 - `scripts/ai/` 用 DeepSeek OpenAI 兼容端点：`deepseek-flash`、显式 `thinking: disabled`、`response_format: json_object`。1M 上下文只用于紧凑的节点索引 + 当前正文，不发送全站原文。
 - AI 提案必须经用户确认；`--write` 才落盘。写入前校验文件哈希，写入后跑 `validateContent`，新增错误会回滚。
