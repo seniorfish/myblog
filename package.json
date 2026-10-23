@@ -22,7 +22,9 @@
     "test": "vitest run",
     "test:e2e": "tsx scripts/e2e.ts",
     "typecheck": "tsc --noEmit && tsc -p sw/tsconfig.json --noEmit",
-    "migrate:meta": "tsx scripts/migrate-meta.ts"
+    "migrate:meta": "tsx scripts/migrate-meta.ts",
+    "contract:build": "forge build --root contracts",
+    "contract:test": "forge test --root contracts -vvv"
   },
   "dependencies": {
     "@shikijs/rehype": "4.5.0",
