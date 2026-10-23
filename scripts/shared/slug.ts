@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { metaRelPathFor, parseMetadataSource } from '../../core/metadata.ts';
+import { metaRelPathFor, nodeIdFromPath, parseMetadataSource } from '../../core/metadata.ts';
 
 export function slugify(input: string): string {
   const ascii = input
@@ -75,4 +75,32 @@ export async function uniqueSlug(
   }
 
   return `${base}-${randomBytes(2).toString('hex')}`;
+}
+
+/**
+ * Rename a content node's body and sidecar to a new id.
+ * Returns the new relative body path; existing ids are resolved with a numeric suffix.
+ */
+export async function renameContentNode(
+  root: string,
+  fromRel: string,
+  desiredId: string,
+  currentId?: string,
+): Promise<string> {
+  const current = currentId ?? nodeIdFromPath(fromRel);
+  const id = await uniqueSlug(root, desiredId, current);
+  const nextRel = `content/${id}.md`;
+  if (nextRel === fromRel) return fromRel;
+
+  const nextMeta = metaRelPathFor(nextRel);
+  await rename(path.join(root, fromRel), path.join(root, nextRel));
+
+  const currentMeta = metaRelPathFor(fromRel);
+  try {
+    await rename(path.join(root, currentMeta), path.join(root, nextMeta));
+  } catch {
+    // Sidecar is optional; validation reports it when the content needs one.
+  }
+
+  return nextRel;
 }

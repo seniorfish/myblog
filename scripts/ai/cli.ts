@@ -5,6 +5,7 @@ import { defineCommand, runMain } from 'citty';
 import { nodeIdFromPath } from '../../core/metadata.ts';
 import { getPrimaryTag, inspectFrontmatter, readRawContentFile } from '../shared/content-file.ts';
 import { openInEditor } from '../shared/editor.ts';
+import { slugify } from '../shared/slug.ts';
 import { aiConfigSummary } from './client.ts';
 import {
   FRONTMATTER_FIELDS,
@@ -26,6 +27,7 @@ import {
   formatSuggestions,
   generateLanguage,
 } from './language.ts';
+import { applySlugRename, formatSlugProposal, generateSlug } from './slug.ts';
 
 function canPrompt(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -262,6 +264,77 @@ async function runLanguageInteractive(root: string, relPath: string): Promise<nu
   }
 }
 
+async function runSlugInteractive(root: string, relPath: string): Promise<number> {
+  let noCache = false;
+
+  for (;;) {
+    const spinner = p.spinner();
+    spinner.start('正在生成 id…');
+    let generation;
+    try {
+      generation = await generateSlug(root, relPath, { noCache });
+      spinner.stop(`生成完成${generation.cached ? '（缓存）' : ''}`);
+    } catch (error) {
+      spinner.stop('生成失败');
+      p.log.error(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+
+    for (const warning of generation.warnings) p.log.warn(warning);
+    p.note(formatSlugProposal(generation), 'AI 建议');
+
+    if (!generation.resolved) {
+      p.outro('没有可用的 id。可以用 `npm run ai -- slug <file> --id <id>` 手动指定。');
+      return 1;
+    }
+    if (generation.unchanged) {
+      p.outro(`保持 ${generation.currentId}，未改名。`);
+      return 0;
+    }
+
+    const choices = [
+      generation.resolved,
+      ...generation.candidates.filter((item) => item !== generation.candidates[0]),
+    ].filter((item, index, all) => all.indexOf(item) === index);
+    const picked = await p.select({
+      message: '选择 id',
+      options: [
+        ...choices.map((item, index) => ({
+          value: item,
+          label: item,
+          hint: index === 0 ? 'AI 首选' : '备选',
+        })),
+        { value: '__again', label: '重新生成' },
+        { value: '__cancel', label: '取消' },
+      ],
+    });
+    if (p.isCancel(picked) || picked === '__cancel') {
+      p.outro('未改名。');
+      return 0;
+    }
+    if (picked === '__again') {
+      noCache = true;
+      continue;
+    }
+
+    try {
+      const result = await applySlugRename(root, relPath, String(picked), {
+        expectedHash: generation.fileHash,
+      });
+      if (!result.renamed) {
+        p.outro('id 没有变化，未改名。');
+        return 0;
+      }
+      p.log.success(`renamed ${result.from} -> ${result.to}`);
+      p.outro(`下一步：npm run blog -- save ${result.to}`);
+      return 0;
+    } catch (error) {
+      p.log.error(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+}
+
 async function runInteractive(root: string): Promise<number> {
   if (!canPrompt()) {
     console.error('交互模式需要 TTY。请使用 `npm run ai -- frontmatter <file>`。');
@@ -288,6 +361,7 @@ async function runInteractive(root: string): Promise<number> {
     message: '选择操作',
     options: [
       { value: 'frontmatter', label: '元数据', hint: '补全 tags / title / description' },
+      { value: 'slug', label: 'id 建议', hint: '生成语义化 slug，可直接改名' },
       { value: 'language', label: '语言优化建议', hint: '校对 / 精简 / 改写' },
       { value: 'translate', label: '翻译', hint: '即将支持', disabled: true },
     ],
@@ -299,6 +373,9 @@ async function runInteractive(root: string): Promise<number> {
 
   if (operation === 'frontmatter') {
     return runFrontmatterInteractive(root, file as string);
+  }
+  if (operation === 'slug') {
+    return runSlugInteractive(root, file as string);
   }
   if (operation === 'language') {
     return runLanguageInteractive(root, file as string);
@@ -529,6 +606,105 @@ const languageCommand = defineCommand({
   },
 });
 
+const slugCommand = defineCommand({
+  meta: {
+    name: 'slug',
+    description: '为单个文件建议或应用语义化 id（ASCII slug）。',
+  },
+  args: {
+    file: { type: 'positional', required: true, description: '内容文件。' },
+    id: { type: 'string', description: '手动指定 id，跳过 AI。' },
+    write: { type: 'boolean', default: false, description: '应用建议的 id（重命名 .md 与 .meta.yml）。' },
+    json: { type: 'boolean', default: false, description: '输出机器可读的 JSON。' },
+    'no-cache': { type: 'boolean', default: false, description: '绕过 AI 缓存。' },
+  },
+  async run({ args }) {
+    const root = process.cwd();
+    const relPath = normalizeContentArg(String(args.file));
+
+    const emit = (payload: Record<string, unknown>, text: () => string): void => {
+      if (args.json) {
+        process.stdout.write(`${JSON.stringify({ ok: true, file: relPath, ...payload }, null, 2)}\n`);
+      } else {
+        console.log(text());
+      }
+    };
+
+    try {
+      const manual = args.id ? slugify(String(args.id)) : '';
+      if (args.id && !manual) {
+        throw new Error('--id 至少需要包含一个 ASCII 字母或数字。');
+      }
+      if (manual === 'new-blog') {
+        throw new Error('new-blog 是保留的模板 id，请换一个 slug。');
+      }
+
+      let resolved = manual;
+      let generation: Awaited<ReturnType<typeof generateSlug>> | null = null;
+
+      if (!resolved) {
+        generation = await generateSlug(root, relPath, { noCache: args['no-cache'] });
+        for (const warning of generation.warnings) {
+          if (!args.json) console.warn(`warning: ${warning}`);
+        }
+        resolved = generation.resolved ?? '';
+        if (!resolved) {
+          throw new Error('AI 没有给出可用的 ASCII id。请用 --id 手动指定。');
+        }
+      }
+
+      const currentId = generation?.currentId ?? nodeIdFromPath(relPath);
+      let renamed = false;
+      let nextPath = relPath;
+      if (args.write) {
+        const result = await applySlugRename(root, relPath, resolved, {
+          expectedHash: generation?.fileHash,
+        });
+        renamed = result.renamed;
+        nextPath = result.to;
+      }
+
+      emit(
+        {
+          currentId,
+          id: resolved,
+          alternatives: generation?.candidates.slice(1) ?? [],
+          reason: generation?.proposal.reason ?? '',
+          renamed,
+          path: nextPath,
+          warnings: generation?.warnings ?? [],
+          cached: generation?.cached ?? false,
+          model: generation?.model ?? null,
+          usage: generation?.usage,
+        },
+        () =>
+          [
+            generation
+              ? formatSlugProposal(generation)
+              : `当前：${currentId}\n建议：${resolved}`,
+            args.write
+              ? renamed
+                ? `已重命名：${relPath} -> ${nextPath}`
+                : `id 未变化，文件保留在 ${relPath}`
+              : `未写入。加 --write 应用改名。`,
+          ].join('\n'),
+      );
+    } catch (error) {
+      if (args.json) {
+        process.stdout.write(
+          `${JSON.stringify({
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }, null, 2)}\n`,
+        );
+      } else {
+        console.error(error instanceof Error ? error.message : String(error));
+      }
+      process.exitCode = 1;
+    }
+  },
+});
+
 const doctorCommand = defineCommand({
   meta: { name: 'doctor', description: '检查 DeepSeek 配置。' },
   args: {
@@ -553,10 +729,11 @@ const main = defineCommand({
   meta: {
     name: 'ai',
     version: '0.1.0',
-    description: '单文件 AI 助手：元数据、语言优化。',
+    description: '单文件 AI 助手：元数据、id 建议、语言优化。',
   },
   subCommands: {
     frontmatter: frontmatterCommand,
+    slug: slugCommand,
     language: languageCommand,
     doctor: doctorCommand,
   },

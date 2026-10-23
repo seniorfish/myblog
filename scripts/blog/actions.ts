@@ -15,7 +15,7 @@ import {
   TEMPLATE_SOURCE,
 } from '../shared/content-file.ts';
 import { commitPaths, getFileAtHead, pushChanges } from '../shared/git-cli.ts';
-import { uniqueSlug } from '../shared/slug.ts';
+import { renameContentNode, uniqueSlug } from '../shared/slug.ts';
 import type { Candidate, BlogState } from './state.ts';
 
 export async function createTemplateFile(
@@ -36,29 +36,28 @@ export async function createTemplateFile(
   return [targetRel, targetMeta];
 }
 
+/**
+ * Rename the template to a permanent id. `preferredId` (usually an AI slug
+ * suggestion) wins over the title/first-line derivation; it is still
+ * sanitized and de-duplicated.
+ */
 export async function renameTemplate(
   root: string,
   candidate: Candidate,
+  preferredId?: string,
 ): Promise<string> {
   const desired =
+    (preferredId && preferredId.trim()) ||
     (typeof candidate.data?.title === 'string' && candidate.data.title.trim()) ||
     candidate.body?.split('\n').find((line) => line.trim()) ||
     candidate.id;
+
   let slug = await uniqueSlug(root, desired, candidate.id);
   if (slug === 'new-blog') {
     slug = await uniqueSlug(root, 'new-blog-note', candidate.id);
   }
-  const nextRel = `content/${slug}.md`;
-  if (nextRel === candidate.path) return candidate.path;
 
-  const currentMeta = candidate.metaPath ?? metaRelPathFor(candidate.path);
-  const nextMeta = metaRelPathFor(nextRel);
-
-  await rename(path.join(root, candidate.path), path.join(root, nextRel));
-  if (existsSync(path.join(root, currentMeta))) {
-    await rename(path.join(root, currentMeta), path.join(root, nextMeta));
-  }
-  return nextRel;
+  return renameContentNode(root, candidate.path, slug, candidate.id);
 }
 
 function parseHeadData(root: string, relPath: string): Record<string, unknown> | null {

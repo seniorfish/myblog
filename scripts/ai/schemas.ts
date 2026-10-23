@@ -41,3 +41,11 @@ export type LanguageMode = (typeof LANGUAGE_MODES)[number];
 
 export const LANGUAGE_OUTPUTS = ['advice', 'rewrite'] as const;
 export type LanguageOutput = (typeof LANGUAGE_OUTPUTS)[number];
+
+export const slugProposalSchema = z.object({
+  id: z.string().nullable().optional(),
+  alternatives: z.array(z.string()).default([]),
+  reason: z.string().default(''),
+});
+
+export type SlugProposal = z.infer<typeof slugProposalSchema>;

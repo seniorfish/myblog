@@ -141,6 +141,35 @@ async function handleBlockers(state: BlogState): Promise<'again' | number> {
   return runAiFrontmatter(state.root, target.path) === 0 ? 'again' : 1;
 }
 
+function runAiSlug(
+  root: string,
+  relPath: string,
+): { id: string | null; alternatives: string[]; reason: string } | null {
+  const result = spawnSync('npm', ['run', 'ai', '--', 'slug', relPath, '--json'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: true,
+    env: process.env,
+  });
+  if (result.status !== 0 || !result.stdout) return null;
+  try {
+    const payload = JSON.parse(result.stdout) as {
+      ok?: boolean;
+      id?: string | null;
+      alternatives?: string[];
+      reason?: string;
+    };
+    if (payload.ok === false) return null;
+    return {
+      id: payload.id ?? null,
+      alternatives: Array.isArray(payload.alternatives) ? payload.alternatives : [],
+      reason: payload.reason ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 function runAiFrontmatter(root: string, relPath: string): number {
   const result = spawnSync('npm', ['run', 'ai', '--', 'frontmatter', relPath], {
     cwd: root,
@@ -153,15 +182,62 @@ function runAiFrontmatter(root: string, relPath: string): number {
 
 async function commitFlow(state: BlogState, candidate: Candidate): Promise<'again' | number> {
   if (candidate.id === 'new-blog') {
-    const rename = await p.confirm({
-      message: 'new-blog.md 是临时文件名，提交前需要改成正式 id。现在生成并重命名？',
-      initialValue: true,
+    const hasKey = Boolean(process.env.DEEPSEEK_API_KEY);
+    const action = await p.select({
+      message: 'new-blog.md 是临时文件名，提交前需要改成正式 id。',
+      options: [
+        {
+          value: 'ai',
+          label: 'AI 生成语义化 id',
+          hint: hasKey ? '根据标题与正文建议拼音 / 英文 slug' : '需要 DEEPSEEK_API_KEY',
+          disabled: !hasKey,
+        },
+        {
+          value: 'derive',
+          label: '从标题或首行推导',
+          hint: '纯中文会退化为随机 post-xxxxxxxx',
+        },
+        { value: 'cancel', label: '取消' },
+      ],
     });
-    if (p.isCancel(rename) || !rename) {
+    if (p.isCancel(action) || action === 'cancel') {
       p.outro('未提交。');
       return 1;
     }
-    const nextPath = await renameTemplate(state.root, candidate);
+
+    let suggested = '';
+    if (action === 'ai') {
+      const spinner = p.spinner();
+      spinner.start('正在生成 id…');
+      const suggestion = runAiSlug(state.root, candidate.path);
+      spinner.stop(suggestion ? '生成完成' : '生成失败');
+      if (suggestion?.id) {
+        suggested = suggestion.id;
+        if (suggestion.reason) p.log.info(`理由：${suggestion.reason}`);
+        const others = suggestion.alternatives.filter((item) => item !== suggestion.id);
+        if (others.length > 0) p.log.info(`备选：${others.join(', ')}`);
+      } else {
+        p.log.warn('AI 没有给出可用的 id，请手动填写。');
+      }
+    }
+
+    const input = await p.text({
+      message: '确认 id（ASCII、小写、连字符）',
+      placeholder: '例如 bing-shan',
+      initialValue: suggested || undefined,
+      validate: (value) => {
+        const slug = slugify(String(value ?? ''));
+        if (!slug) return '至少需要一个 ASCII 字母或数字。';
+        if (slug === 'new-blog') return 'new-blog 是保留 id。';
+        return undefined;
+      },
+    });
+    if (p.isCancel(input)) {
+      p.outro('未提交。');
+      return 1;
+    }
+
+    const nextPath = await renameTemplate(state.root, candidate, String(input));
     p.log.success(`renamed ${candidate.path} -> ${nextPath}`);
     return 'again';
   }

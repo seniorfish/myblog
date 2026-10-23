@@ -32,7 +32,7 @@ npm run dev -- terminal
 推荐使用两个命令，各自负责一层：
 
 - `npm run blog`：仓库级状态机。检查 Git、创建模板、校验、提交、推送。
-- `npm run ai`：文件级 AI 助手。补全 `*.meta.yml`、给语言建议或改写正文；不做 Git 操作。
+- `npm run ai`：文件级 AI 助手。补全 `*.meta.yml`、建议语义化 id（slug）、给语言建议或改写正文；不做 Git 操作。
 
 典型流程：
 
@@ -54,9 +54,14 @@ npm run blog -- push --yes
 
 npm run ai -- frontmatter content/new-blog.md --fields tags,description --json
 npm run ai -- frontmatter content/new-blog.md --fields tags,description --write
+npm run ai -- slug content/new-blog.md --json
+npm run ai -- slug content/new-blog.md --write
+npm run ai -- slug content/new-blog.md --id bing-shan --write
 npm run ai -- language content/hello.md --mode proofread --output advice --json
 npm run ai -- language content/hello.md --mode concise --output rewrite --write
 ```
+
+`npm run ai -- slug` 会把中文标题/正文转成拼音或英文 slug。id 只允许 ASCII，纯中文标题直接用 `slugify` 会退化为 `post-xxxxxxxx`；`--write` 会同时重命名 `.md` 与 `.meta.yml`，`--id` 可跳过 AI 手动指定。
 
 `npm run ai` 使用 `DEEPSEEK_API_KEY`，模型默认 `deepseek-flash`：
 
@@ -91,7 +96,7 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 | 命令 | 作用 |
 | --- | --- |
 | `npm run blog` | 交互式检查/创建/提交/推送内容 |
-| `npm run ai` | 交互式元数据 / 语言优化 |
+| `npm run ai` | 交互式元数据 / id 建议 / 语言优化 |
 | `npm run hooks:install` | 安装内容校验 pre-commit 钩子 |
 | `npm run compile` | 只运行内容编译器 |
 | `npm run migrate:meta` | 一次性迁移：把旧 frontmatter 拆到 `.meta.yml`（默认 dry run） |
@@ -166,7 +171,7 @@ host/             sys-theme-dock 宿主组件（TypeScript）
 sw/               Service Worker（TypeScript）
 scripts/          compile / prepare-theme / dev / build / build-all / serve / e2e
 scripts/blog/     npm run blog：仓库状态机与 Git 操作
-scripts/ai/       npm run ai：DeepSeek 元数据 / 语言建议
+scripts/ai/       npm run ai：DeepSeek 元数据 / id / 语言建议
 scripts/shared/   两个 CLI 共享的解析、Git、diff、slug 与编辑器工具
 templates/        new-blog.md + new-blog.meta.yml 模板（不参与编译）
 .githooks/        可选的内容校验 pre-commit 钩子

@@ -1,3 +1,4 @@
+import { nodeIdFromPath } from '../../core/metadata.ts';
 import type { RawContentFile } from '../shared/content-file.ts';
 import type { ChatMessage } from './client.ts';
 import type { FrontmatterField, LanguageMode, LanguageOutput } from './schemas.ts';
@@ -123,6 +124,56 @@ export function buildLanguageMessages(
     '</content_guide>',
     `<mode>${mode}</mode>`,
     `<output>${output}</output>`,
+    targetBlock(target),
+  ].join('\n');
+
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
+
+/** Node ids the AI must not reuse; the current node is listed separately. */
+function existingIdsText(context: AiContext, currentId: string): string {
+  return [...context.ids]
+    .filter((id) => id !== currentId)
+    .sort()
+    .join('\n');
+}
+
+export function buildSlugMessages(
+  context: AiContext,
+  target: RawContentFile,
+): ChatMessage[] {
+  const currentId = nodeIdFromPath(target.relPath);
+
+  const system = [
+    'You propose URL-safe node ids (slugs) for a Chinese personal blog whose content is written in Markdown.',
+    'Return exactly one JSON object. Do not wrap it in Markdown fences. Do not explain outside the JSON.',
+    '',
+    'Rules for the id:',
+    '- ASCII only, lowercase, kebab-case words separated by single hyphens.',
+    '- 2-5 words, 6-48 characters total.',
+    '- Romanized Mandarin pinyin or concise English, whichever reads better for the topic.',
+    '- Describe the subject of the text, not its genre, date, or version. No dates, no numbers unless they are part of the topic.',
+    '- Never return an id listed in <existing_ids>, and never return "new-blog".',
+    '- Prefer nouns that a reader could guess from the article.',
+    '',
+    'Also return 2-4 alternative ids that follow the same rules.',
+    'reason must be one short Chinese sentence explaining the choice.',
+    '',
+    'Output shape:',
+    '{"id": "example-slug", "alternatives": ["other-slug", "third-slug"], "reason": "中文理由"}',
+  ].join('\n');
+
+  const user = [
+    '<content_guide>',
+    context.contentGuide.slice(0, 10_000),
+    '</content_guide>',
+    `<current_id>${currentId}</current_id>`,
+    '<existing_ids>',
+    existingIdsText(context, currentId),
+    '</existing_ids>',
     targetBlock(target),
   ].join('\n');
 

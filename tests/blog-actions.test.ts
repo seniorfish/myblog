@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SiteConfig } from '../core/contract.ts';
 import type { BlogState, Candidate } from '../scripts/blog/state.ts';
-import { commitCandidate } from '../scripts/blog/actions.ts';
+import { commitCandidate, renameTemplate } from '../scripts/blog/actions.ts';
 import { readGitContext } from '../scripts/shared/git-cli.ts';
 import { readRawContentFile } from '../scripts/shared/content-file.ts';
 
@@ -97,5 +98,47 @@ describe('commitCandidate', () => {
     expect(
       git(['show', '--name-only', '--format=', 'HEAD']).split('\n').sort(),
     ).toEqual(['content/a.md', 'content/a.meta.yml']);
+  });
+});
+
+describe('renameTemplate', () => {
+  async function templateCandidate(): Promise<Candidate> {
+    await writeFile(path.join(repo, 'content', 'new-blog.md'), '冰山\n');
+    await writeFile(
+      path.join(repo, 'content', 'new-blog.meta.yml'),
+      'tags: 文章\ntitle: 冰山\n',
+    );
+    return {
+      path: 'content/new-blog.md',
+      metaPath: 'content/new-blog.meta.yml',
+      id: 'new-blog',
+      kind: 'untracked',
+      exists: true,
+      staged: false,
+      isTemplate: true,
+      data: { tags: '文章', title: '冰山' },
+      body: '冰山\n',
+      errors: [],
+      warnings: [],
+    };
+  }
+
+  it('uses the preferred id and moves the sidecar', async () => {
+    const candidate = await templateCandidate();
+
+    const next = await renameTemplate(repo, candidate, 'Bing Shan');
+
+    expect(next).toBe('content/bing-shan.md');
+    expect(existsSync(path.join(repo, 'content', 'bing-shan.md'))).toBe(true);
+    expect(existsSync(path.join(repo, 'content', 'bing-shan.meta.yml'))).toBe(true);
+    expect(existsSync(path.join(repo, 'content', 'new-blog.md'))).toBe(false);
+  });
+
+  it('falls back to the title when no id is preferred', async () => {
+    const candidate = await templateCandidate();
+
+    const next = await renameTemplate(repo, candidate);
+
+    expect(next).toMatch(/^content\/post-[0-9a-f]{8}\.md$/u);
   });
 });

@@ -23,9 +23,11 @@ npm run serve          # 本地静态服务器（需要先 build:all）
 npm run test:e2e       # 无头 Chrome 端到端（需要先 build:all）
 npm run compile        # 只编译内容
 npm run blog           # 交互式：检查/创建/提交/推送内容
-npm run ai             # 交互式：单文件元数据 / 语言优化
+npm run ai             # 交互式：单文件元数据 / id 建议 / 语言优化
 npm run blog -- status --json
 npm run ai -- frontmatter content/foo.md --fields tags,description --json
+npm run ai -- slug content/foo.md --json         # 语义化 id（拼音/英文）
+npm run ai -- slug content/foo.md --write        # 确认后重命名 .md + .meta.yml
 npm test               # Vitest
 npm run typecheck      # 主程序 + Service Worker 类型检查
 npm run prepare-theme -- default
@@ -42,7 +44,7 @@ SW 更新间隔：本地 `build:all` 默认 1000ms，CI/生产 30 分钟；用 `
 | `core/` 其他 | 编译器。改动后跑 `npm test` 与 `npm run build` |
 | `scripts/` | 构建/开发脚本。保持 `prepare-theme` 的注入契约 |
 | `scripts/blog/` | `npm run blog`：仓库状态机、模板、校验、commit/push。只在这里做 Git 写操作 |
-| `scripts/ai/` | `npm run ai`：单文件元数据 / 语言操作。禁止执行 Git 命令 |
+| `scripts/ai/` | `npm run ai`：单文件元数据 / id 建议 / 语言操作。禁止执行 Git 命令 |
 | `scripts/shared/` | 两个 CLI 共享的 Git 查询、元数据 IO、slug、diff、编辑器 |
 | `templates/new-blog.md` + `templates/new-blog.meta.yml` | 新文章模板，不参与编译；成对复制到 `content/` 后使用 |
 | `.githooks/pre-commit` | 可选的内容校验钩子；`npm run hooks:install` 安装 |
