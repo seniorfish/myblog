@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,6 +29,18 @@ async function writeNode(id: string, meta: string, body: string): Promise<void> 
   await writeFile(path.join(repo, 'content', `${id}.meta.yml`), meta);
 }
 
+async function writeAnchorsBranch(content: string, date: string): Promise<void> {
+  git(['checkout', '--orphan', 'anchors']);
+  git(['rm', '-rf', '.']);
+  await writeFile(path.join(repo, 'anchors.ndjson'), content);
+  git(['add', 'anchors.ndjson']);
+  git(['commit', '-m', 'anchor'], {
+    GIT_AUTHOR_DATE: date,
+    GIT_COMMITTER_DATE: date,
+  });
+  git(['checkout', 'main']);
+}
+
 function testConfig(chainEnabled = true): SiteConfig {
   return {
     title: 'Test Blog',
@@ -48,11 +61,13 @@ function testConfig(chainEnabled = true): SiteConfig {
     },
     chain: {
       enabled: chainEnabled,
-      name: 'base-sepolia',
-      chainId: 84532,
+      name: 'base-mainnet',
+      chainId: 8453,
       address: `0x${'1'.repeat(40)}`,
-      rpcUrl: 'https://sepolia.base.org',
-      explorerUrl: 'https://sepolia.basescan.org',
+      contract: `0x${'2'.repeat(40)}`,
+      deployBlock: 10,
+      rpcUrl: 'https://mainnet.base.org',
+      explorerUrl: 'https://basescan.org',
     },
   };
 }
@@ -76,20 +91,25 @@ afterEach(async () => {
 });
 
 describe('compileSite', () => {
-  it('produces site data, search, RSS, sitemap, raw, proof, and metadata', async () => {
+  it('produces site data, search, RSS, sitemap, and metadata', async () => {
     const commit = await commitAll('first', '2024-01-01T00:00:00Z');
     const tx = `0x${'b'.repeat(64)}`;
-    const note = JSON.stringify({
+    const contract = `0x${'2'.repeat(40)}`;
+    const sender = `0x${'1'.repeat(40)}`;
+    const record = JSON.stringify({
       schema: 1,
-      chain: 'base-sepolia',
-      chainId: 84532,
+      chain: 'base-mainnet',
+      chainId: 8453,
+      commit,
+      contract,
+      sender,
       tx,
       block: 42,
       blockTimestamp: 1700000000,
-      commit,
+      logIndex: 0,
       repo: 'tester/blog',
     });
-    git(['notes', '--ref=blockchain', 'add', '-m', note, commit]);
+    await writeAnchorsBranch(`${record}\n`, '2024-01-02T00:00:00Z');
 
     const outDir = path.join(repo, 'out');
     const result = await compileSite({
@@ -109,13 +129,17 @@ describe('compileSite', () => {
     expect(node?.displayTime).toBe(1700000000);
     expect(node?.displayDate.iso).toBe('2023-11-14');
     expect(node?.html).toContain('<strong>world</strong>');
+    expect(node?.revisions[0]?.anchor?.contract).toBe(contract);
+    expect(node?.revisions[0]?.anchor?.sender).toBe(sender);
+    expect(node?.revisions[0]?.gitBlobSha1).toBe(
+      git(['rev-parse', `${commit}:content/hello.md`]),
+    );
 
     const siteData = JSON.parse(await readFile(path.join(outDir, 'site-data.json'), 'utf8'));
     expect(siteData.site.buildId).toBe(result.buildMeta?.buildId);
 
-    const proof = JSON.parse(await readFile(path.join(outDir, 'proof/hello.json'), 'utf8'));
-    expect(proof.isVerified).toBe(true);
-    expect(proof.revisions[0].anchor.txHash).toBe(tx);
+    expect(existsSync(path.join(outDir, 'proof/hello.json'))).toBe(false);
+    expect(existsSync(path.join(outDir, 'raw/hello.md'))).toBe(false);
 
     const rss = await readFile(path.join(outDir, 'rss.xml'), 'utf8');
     expect(rss).toContain('<title>Test Node</title>');
@@ -128,12 +152,23 @@ describe('compileSite', () => {
     expect(robots).toContain('Sitemap: https://example.com/sitemap.xml');
 
     await access(path.join(outDir, 'search-index.json'));
-    await access(path.join(outDir, 'raw/hello.md'));
     await access(path.join(outDir, 'build-meta.json'));
+  });
 
-    const raw = await readFile(path.join(outDir, 'raw/hello.md'), 'utf8');
-    expect(raw.startsWith('---')).toBe(false);
-    expect(raw).toContain('Hello **world**.');
+  it('warns but still builds when the anchors branch is missing', async () => {
+    await commitAll('first', '2024-01-01T00:00:00Z');
+    const outDir = path.join(repo, 'out');
+    const result = await compileSite({
+      root: repo,
+      outDir,
+      config: testConfig(true),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.siteData?.nodes[0]?.isVerified).toBe(false);
+    expect(
+      result.buildMeta?.warnings.some((warning) => warning.includes('anchors branch')),
+    ).toBe(true);
   });
 
   it('renders the homepage node at / and keeps it out of feeds', async () => {

@@ -20,8 +20,12 @@ export interface ChainConfig {
   enabled: boolean;
   name: string;
   chainId: number;
-  /** Public anchor address. Never put a private key in this config. */
+  /** Public anchor sender address. Never put a private key in this config. */
   address: string;
+  /** Event-only anchor contract. */
+  contract: string;
+  /** Contract deployment block; records below it are ignored. */
+  deployBlock: number;
   rpcUrl: string;
   explorerUrl: string;
   confirmations?: number;
@@ -75,7 +79,12 @@ export interface AnchorInfo {
   blockNumber: number;
   /** Block timestamp in seconds. */
   blockTimestamp: number;
+  /** Transaction explorer URL. */
   explorerUrl: string;
+  contract: string;
+  sender: string;
+  contractExplorerUrl: string;
+  senderExplorerUrl: string;
 }
 
 export interface RevisionProof {
@@ -89,6 +98,8 @@ export interface RevisionProof {
   diff: string;
   /** SHA-256 of the article body file (.md) at this commit. */
   fileSha256: string;
+  /** Git blob SHA-1 of the article body at this commit; empty when unavailable. */
+  gitBlobSha1: string;
   anchor: AnchorInfo | null;
   /** Anchor block timestamp in seconds, or null when unverified. */
   verifiedAt: number | null;
@@ -170,22 +181,6 @@ export interface SearchDoc {
 export interface SearchIndex {
   schema: 1;
   docs: SearchDoc[];
-}
-
-export interface NodeProof {
-  schema: 1;
-  nodeId: string;
-  repo: string;
-  chain: {
-    name: string;
-    chainId: number;
-    rpcUrl: string;
-    explorerUrl: string;
-  };
-  revisions: RevisionProof[];
-  createdAt: number | null;
-  updatedAt: number | null;
-  isVerified: boolean;
 }
 
 export interface BuildMeta {

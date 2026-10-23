@@ -110,18 +110,21 @@ export function normalizeTags(value: string | string[]): NormalizedTags {
   };
 }
 
-export const anchorNoteSchema = z.object({
+export const anchorRecordSchema = z.object({
   schema: z.literal(1),
   chain: z.string().min(1),
   chainId: z.number().int().positive(),
+  commit: z.string().regex(/^[0-9a-fA-F]{40,64}$/),
+  contract: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  sender: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   tx: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
   block: z.number().int().nonnegative(),
   blockTimestamp: z.number().int().nonnegative(),
-  commit: z.string().regex(/^[0-9a-fA-F]{40,64}$/),
+  logIndex: z.number().int().nonnegative().optional(),
   repo: z.string().min(1),
 });
 
-export type AnchorNote = z.infer<typeof anchorNoteSchema>;
+export type AnchorRecord = z.infer<typeof anchorRecordSchema>;
 
 export const themeContractSchema = z.object({
   id: z.string().min(1),
@@ -161,6 +164,8 @@ export const siteConfigSchema = z.object({
     name: z.string().min(1),
     chainId: z.number().int().positive(),
     address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    contract: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    deployBlock: z.number().int().nonnegative(),
     rpcUrl: z.url(),
     explorerUrl: z.url(),
     confirmations: z.number().int().nonnegative().optional(),

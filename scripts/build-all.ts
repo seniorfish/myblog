@@ -10,7 +10,6 @@ import { sha256Hex } from '../core/hash.ts';
 import {
   TEXT_EXTENSIONS,
   contentTypeFor,
-  encodePath,
   toUrlPath,
   validateVfs,
   type Vfs,
@@ -70,13 +69,6 @@ const HEADERS = `/*
 
 /_sys/sys.js
   Cache-Control: no-cache
-
-/raw/*
-  Cache-Control: no-cache
-  X-Content-Type-Options: nosniff
-
-/proof/*
-  Cache-Control: public, max-age=300
 `;
 
 function gitOutput(root: string, args: string[]): string {
@@ -198,21 +190,6 @@ async function collectVfsFiles(
   }
 
   const generatedDir = path.join(root, 'build', 'generated');
-  for (const [source, prefix] of [
-    ['raw', '/raw/'],
-    ['proof', '/proof/'],
-  ] as const) {
-    const sourceDir = path.join(generatedDir, source);
-    if (!existsSync(sourceDir)) continue;
-
-    for (const rel of await walkFiles(sourceDir)) {
-      files.set(`${prefix}${encodePath(rel)}`, {
-        abs: path.join(sourceDir, rel),
-        type: contentTypeFor(rel),
-      });
-    }
-  }
-
   const searchIndex = path.join(generatedDir, 'search-index.json');
   if (existsSync(searchIndex)) {
     files.set('/search-index.json', {
@@ -268,17 +245,19 @@ async function packageTheme(
 }
 
 function anchorsHash(siteData: SiteData): string {
-  const keys = siteData.nodes
-    .flatMap((node) =>
-      node.revisions
-        .filter((revision) => revision.anchor !== null)
-        .map(
-          (revision) =>
-            `${revision.anchor!.chainId}:${revision.anchor!.txHash}:${revision.anchor!.blockTimestamp}`,
-        ),
-    )
-    .sort();
-  return sha256Hex(keys.join('\n'));
+  const keys = new Set<string>();
+
+  for (const node of siteData.nodes) {
+    for (const revision of node.revisions) {
+      const anchor = revision.anchor;
+      if (!anchor) continue;
+      keys.add(
+        `${anchor.chainId}:${anchor.contract.toLowerCase()}:${anchor.sender.toLowerCase()}:${anchor.txHash}:${anchor.blockTimestamp}`,
+      );
+    }
+  }
+
+  return sha256Hex([...keys].sort().join('\n'));
 }
 
 function makeReleaseId(
@@ -290,7 +269,7 @@ function makeReleaseId(
   return sha256Hex(
     JSON.stringify({
       schema: 1,
-      compiler: 'm2',
+      compiler: 'm3',
       contentHash: buildMeta.contentHash,
       anchorsHash: anchorHash,
       site: {
@@ -448,12 +427,6 @@ async function main(): Promise<void> {
   for (const file of ['rss.xml', 'sitemap.xml', 'robots.txt', 'search-index.json']) {
     const source = path.join(generatedDir, file);
     if (existsSync(source)) await cp(source, path.join(distDir, file));
-  }
-  for (const dir of ['raw', 'proof']) {
-    const source = path.join(generatedDir, dir);
-    if (existsSync(source)) {
-      await cp(source, path.join(distDir, dir), { recursive: true });
-    }
   }
 
   for (const required of ['index.html', '404.html', 'manifest.json', 'sw.js']) {

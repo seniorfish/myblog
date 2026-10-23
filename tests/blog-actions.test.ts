@@ -28,6 +28,8 @@ const config = {
     name: 'base-sepolia',
     chainId: 84532,
     address: '0x0000000000000000000000000000000000000000',
+    contract: '0x0000000000000000000000000000000000000000',
+    deployBlock: 0,
     rpcUrl: 'https://sepolia.base.org',
     explorerUrl: 'https://sepolia.basescan.org',
   },

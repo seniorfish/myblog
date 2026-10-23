@@ -5,7 +5,6 @@ import type {
   BuildMeta,
   CompileIssue,
   ContentNode,
-  NodeProof,
   NodeRef,
   RevisionProof,
   SearchIndex,
@@ -14,6 +13,7 @@ import type {
   SiteMeta,
 } from './contract.ts';
 import { computeAnchorCoverage, resolveAnchorTimes, toAnchorInfo } from './anchors.ts';
+import { selectAnchorRecords } from './anchor-index.ts';
 import { loadSiteConfig } from './config.ts';
 import { discoverContent, type ParsedContent } from './content.ts';
 import { formatDisplayDate, truncateText } from './format.ts';
@@ -27,9 +27,9 @@ import {
   getWorkingStatus,
   isGitRepository,
   isWorkingTreeClean,
-  readAnchorNotes,
+  readAnchorRecords,
 } from './git.ts';
-import { sha256Hex, shortHash } from './hash.ts';
+import { gitBlobSha1, sha256Hex, shortHash } from './hash.ts';
 import { renderMarkdown } from './markdown.ts';
 import { buildTree } from './tree.ts';
 
@@ -172,8 +172,6 @@ function renderRobots(site: SiteMeta): string {
   return [
     'User-agent: *',
     'Allow: /',
-    'Disallow: /raw/',
-    'Disallow: /proof/',
     'Disallow: /_themes/',
     `Sitemap: ${site.url}/sitemap.xml`,
     '',
@@ -182,11 +180,9 @@ function renderRobots(site: SiteMeta): string {
 
 async function writeOutputFiles(
   outDir: string,
-  entries: Map<string, ParsedContent>,
   siteData: SiteData,
   searchIndex: SearchIndex,
   buildMeta: BuildMeta,
-  config: SiteConfig,
 ): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
@@ -208,30 +204,6 @@ async function writeOutputFiles(
   );
   await write('robots.txt', renderRobots(siteData.site));
   await write('build-meta.json', json(buildMeta));
-
-  for (const node of siteData.nodes) {
-    const entry = entries.get(node.id);
-    if (!entry) continue;
-
-    await write(`raw/${node.id}.md`, entry.raw);
-
-    const proof: NodeProof = {
-      schema: 1,
-      nodeId: node.id,
-      repo: siteData.site.repo,
-      chain: {
-        name: config.chain.name,
-        chainId: config.chain.chainId,
-        rpcUrl: config.chain.rpcUrl,
-        explorerUrl: config.chain.explorerUrl,
-      },
-      revisions: node.revisions,
-      createdAt: node.createdAt,
-      updatedAt: node.updatedAt,
-      isVerified: node.isVerified,
-    };
-    await write(`proof/${node.id}.json`, json(proof));
-  }
 }
 
 function makeRevision(
@@ -251,6 +223,7 @@ function makeRevision(
         gitTimestamp: timestamp,
         diff: '',
         fileSha256: sha256Hex(entry.raw),
+        gitBlobSha1: gitBlobSha1(entry.raw),
         anchor: null,
         verifiedAt: null,
       },
@@ -273,6 +246,7 @@ function makeRevision(
       gitTimestamp: commit.gitTimestamp,
       diff: getFileDiff(root, commit.commit, entry.relPath),
       fileSha256: blob ? sha256Hex(blob) : '',
+      gitBlobSha1: blob ? gitBlobSha1(blob) : '',
       anchor: null,
       verifiedAt: null,
     } satisfies RevisionProof;
@@ -380,16 +354,26 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
 
   const warnings: string[] = [];
   const commits = getFirstParentCommitList(root);
-  const notes = readAnchorNotes(root);
-  warnings.push(...notes.warnings);
+  const anchorIndex = readAnchorRecords(root);
+  warnings.push(...anchorIndex.warnings);
 
   const anchors = new Map<string, AnchorInfo>();
   if (config.chain.enabled) {
-    for (const [commit, note] of notes.anchors) {
-      anchors.set(commit, toAnchorInfo(note, config.chain.explorerUrl));
+    const selected = selectAnchorRecords(
+      anchorIndex.records,
+      config.chain,
+      config.repo,
+      commits,
+    );
+    warnings.push(...selected.warnings);
+    for (const [commit, record] of selected.anchors) {
+      anchors.set(commit, toAnchorInfo(record, config.chain));
     }
-  } else if (notes.anchors.size > 0) {
-    warnings.push('Blockchain anchoring is disabled in site.config.ts; notes were ignored.');
+    if (!anchorIndex.branchFound) {
+      warnings.push('anchors branch was not found; all revisions are unverified.');
+    }
+  } else if (anchorIndex.records.length > 0) {
+    warnings.push('Blockchain anchoring is disabled in site.config.ts; anchor records were ignored.');
   }
 
   const coverage = computeAnchorCoverage(commits, anchors);
@@ -553,8 +537,7 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
     warnings,
   };
 
-  const entriesById = new Map(discovered.entries.map((entry) => [entry.id, entry]));
-  await writeOutputFiles(outDir, entriesById, siteData, searchIndex, buildMeta, config);
+  await writeOutputFiles(outDir, siteData, searchIndex, buildMeta);
 
   return { ok: true, issues, outDir, siteData, buildMeta };
 }

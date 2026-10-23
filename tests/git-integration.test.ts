@@ -12,7 +12,7 @@ import {
   getMergeCommits,
   getWorkingStatus,
   isGitRepository,
-  readAnchorNotes,
+  readAnchorRecords,
 } from '../core/git.ts';
 
 let repo: string;
@@ -33,6 +33,18 @@ async function commitAll(message: string, date: string): Promise<string> {
   git(['add', '-A'], env);
   git(['commit', '-m', message], env);
   return git(['rev-parse', 'HEAD']);
+}
+
+async function writeAnchorsBranch(content: string, date: string): Promise<void> {
+  git(['checkout', '--orphan', 'anchors']);
+  git(['rm', '-rf', '.']);
+  await writeFile(path.join(repo, 'anchors.ndjson'), content);
+  git(['add', 'anchors.ndjson']);
+  git(['commit', '-m', 'anchor'], {
+    GIT_AUTHOR_DATE: date,
+    GIT_COMMITTER_DATE: date,
+  });
+  git(['checkout', 'main']);
 }
 
 beforeEach(async () => {
@@ -107,31 +119,38 @@ describe('git integration', () => {
     });
   });
 
-  it('reads blockchain notes and ignores malformed ones', async () => {
+  it('reads anchors.ndjson from the anchors branch and ignores malformed lines', async () => {
     const commit = await commitAll('first', '2024-01-01T00:00:00Z');
     const tx = `0x${'a'.repeat(64)}`;
-    const note = JSON.stringify({
+    const contract = `0x${'b'.repeat(40)}`;
+    const sender = `0x${'c'.repeat(40)}`;
+    const record = JSON.stringify({
       schema: 1,
-      chain: 'base-sepolia',
-      chainId: 84532,
+      chain: 'base-mainnet',
+      chainId: 8453,
+      commit,
+      contract,
+      sender,
       tx,
       block: 10,
       blockTimestamp: 1700000000,
-      commit,
       repo: 'tester/blog',
     });
+    await writeAnchorsBranch(`${record}\nnot json\n`, '2024-01-02T00:00:00Z');
 
-    git(['notes', '--ref=blockchain', 'add', '-m', note, commit]);
-    const result = readAnchorNotes(repo);
+    const result = readAnchorRecords(repo);
 
-    expect(result.warnings).toEqual([]);
-    expect(result.anchors.get(commit)?.tx).toBe(tx);
-    expect(result.anchors.get(commit)?.blockTimestamp).toBe(1700000000);
+    expect(result.branchFound).toBe(true);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]?.tx).toBe(tx);
+    expect(result.records[0]?.blockTimestamp).toBe(1700000000);
+    expect(result.warnings.length).toBeGreaterThan(0);
+  });
 
-    git(['notes', '--ref=blockchain', 'add', '-f', '-m', 'not json', commit]);
-    const malformed = readAnchorNotes(repo);
-    expect(malformed.warnings.length).toBeGreaterThan(0);
-    expect(malformed.anchors.size).toBe(0);
+  it('reports a missing anchors branch without throwing', () => {
+    const result = readAnchorRecords(repo);
+    expect(result.branchFound).toBe(false);
+    expect(result.records).toEqual([]);
   });
 
   it('detects merge commits', async () => {

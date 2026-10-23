@@ -19,8 +19,6 @@ function makeVfs(): Vfs {
       '/n/hello': { type: 'text/html; charset=utf-8', body: '<a href="/n/hello">x</a>' },
       '/_astro/x.css': { type: 'text/css; charset=utf-8', body: '' },
       '/_sys/sys.js': { type: 'text/javascript; charset=utf-8', body: '' },
-      '/raw/hello.md': { type: 'text/markdown; charset=utf-8', body: '' },
-      '/proof/hello.json': { type: 'application/json; charset=utf-8', body: '' },
       '/search-index.json': { type: 'application/json; charset=utf-8', body: '' },
     },
   };
@@ -70,13 +68,5 @@ describe('validateVfs', () => {
     expect(() =>
       validateVfs(vfs, { routes: ['/n/hello'], nodeIds: ['hello'] }),
     ).toThrowError(/missing asset/);
-  });
-
-  it('rejects missing raw or proof files', () => {
-    const vfs = makeVfs();
-    delete vfs.files['/proof/hello.json'];
-    expect(() =>
-      validateVfs(vfs, { routes: ['/n/hello'], nodeIds: ['hello'] }),
-    ).toThrowError(/proof\/hello.json/);
   });
 });

@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { computeAnchorCoverage, resolveAnchorTimes, toAnchorInfo } from '../core/anchors.ts';
-import type { AnchorInfo, RevisionProof } from '../core/contract.ts';
+import type { AnchorInfo, ChainConfig, RevisionProof } from '../core/contract.ts';
+import type { AnchorRecord } from '../core/schema.ts';
 
 function makeAnchor(blockTimestamp: number, txHash = `0x${'1'.repeat(64)}`): AnchorInfo {
+  const contract = `0x${'2'.repeat(40)}`;
+  const sender = `0x${'3'.repeat(40)}`;
   return {
-    chain: 'base-sepolia',
-    chainId: 84532,
+    chain: 'base-mainnet',
+    chainId: 8453,
     txHash,
     blockNumber: blockTimestamp,
     blockTimestamp,
-    explorerUrl: `https://sepolia.basescan.org/tx/${txHash}`,
+    explorerUrl: `https://basescan.org/tx/${txHash}`,
+    contract,
+    sender,
+    contractExplorerUrl: `https://basescan.org/address/${contract}`,
+    senderExplorerUrl: `https://basescan.org/address/${sender}`,
   };
 }
 
@@ -22,6 +29,7 @@ function makeRevision(commit: string, gitTimestamp: number): RevisionProof {
     gitTimestamp,
     diff: '',
     fileSha256: '',
+    gitBlobSha1: '',
     anchor: null,
     verifiedAt: null,
   };
@@ -118,22 +126,39 @@ describe('resolveAnchorTimes', () => {
 });
 
 describe('toAnchorInfo', () => {
-  it('builds an explorer URL', () => {
+  it('builds tx, contract, and sender explorer URLs', () => {
     const tx = `0x${'a'.repeat(64)}`;
-    const info = toAnchorInfo(
-      {
-        schema: 1,
-        chain: 'base-sepolia',
-        chainId: 84532,
-        tx,
-        block: 10,
-        blockTimestamp: 20,
-        commit: 'f'.repeat(40),
-        repo: 'owner/repo',
-      },
-      'https://sepolia.basescan.org/',
-    );
+    const contract = `0x${'b'.repeat(40)}`;
+    const sender = `0x${'c'.repeat(40)}`;
+    const record: AnchorRecord = {
+      schema: 1,
+      chain: 'base-mainnet',
+      chainId: 8453,
+      commit: 'f'.repeat(40),
+      contract,
+      sender,
+      tx,
+      block: 10,
+      blockTimestamp: 20,
+      repo: 'owner/repo',
+    };
+    const config: ChainConfig = {
+      enabled: true,
+      name: 'base-mainnet',
+      chainId: 8453,
+      address: sender,
+      contract,
+      deployBlock: 1,
+      rpcUrl: 'https://mainnet.base.org',
+      explorerUrl: 'https://basescan.org/',
+      confirmations: 2,
+    };
 
-    expect(info.explorerUrl).toBe(`https://sepolia.basescan.org/tx/${tx}`);
+    const info = toAnchorInfo(record, config);
+
+    expect(info.chain).toBe('base-mainnet');
+    expect(info.explorerUrl).toBe(`https://basescan.org/tx/${tx}`);
+    expect(info.contractExplorerUrl).toBe(`https://basescan.org/address/${contract}`);
+    expect(info.senderExplorerUrl).toBe(`https://basescan.org/address/${sender}`);
   });
 });

@@ -1,5 +1,5 @@
-import type { AnchorInfo, RevisionProof } from './contract.ts';
-import type { AnchorNote } from './schema.ts';
+import type { AnchorInfo, ChainConfig, RevisionProof } from './contract.ts';
+import type { AnchorRecord } from './schema.ts';
 
 export interface AnchorResolution {
   revisions: RevisionProof[];
@@ -9,15 +9,20 @@ export interface AnchorResolution {
   displayTime: number;
 }
 
-/** Convert a raw note into the public AnchorInfo shape. */
-export function toAnchorInfo(note: AnchorNote, explorerUrl: string): AnchorInfo {
+/** Convert a validated anchor record into the public AnchorInfo shape. */
+export function toAnchorInfo(record: AnchorRecord, config: ChainConfig): AnchorInfo {
+  const explorer = config.explorerUrl.replace(/\/+$/u, '');
   return {
-    chain: note.chain,
-    chainId: note.chainId,
-    txHash: note.tx,
-    blockNumber: note.block,
-    blockTimestamp: note.blockTimestamp,
-    explorerUrl: `${explorerUrl.replace(/\/+$/u, '')}/tx/${note.tx}`,
+    chain: config.name,
+    chainId: record.chainId,
+    txHash: record.tx,
+    blockNumber: record.block,
+    blockTimestamp: record.blockTimestamp,
+    explorerUrl: `${explorer}/tx/${record.tx}`,
+    contract: record.contract,
+    sender: record.sender,
+    contractExplorerUrl: `${explorer}/address/${record.contract}`,
+    senderExplorerUrl: `${explorer}/address/${record.sender}`,
   };
 }
 

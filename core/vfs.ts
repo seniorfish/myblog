@@ -66,7 +66,7 @@ export function contentTypeFor(rel: string): string {
 export interface VfsExpectations {
   /** Node URLs, e.g. /n/hello. */
   routes: string[];
-  /** Node ids, used to check raw/proof files. */
+  /** Node ids; kept for callers that validate node coverage. */
   nodeIds: string[];
 }
 
@@ -79,15 +79,6 @@ export function validateVfs(vfs: Vfs, expectations: VfsExpectations): number {
     if (!file) throw new Error(`Theme ${vfs.themeId}: VFS is missing route ${route}.`);
     if (!file.type.startsWith('text/html')) {
       throw new Error(`Theme ${vfs.themeId}: route ${route} is not HTML.`);
-    }
-  }
-
-  for (const id of expectations.nodeIds) {
-    if (!vfs.files[`/raw/${encodePath(id)}.md`]) {
-      throw new Error(`Theme ${vfs.themeId}: VFS is missing raw/${id}.md.`);
-    }
-    if (!vfs.files[`/proof/${encodePath(id)}.json`]) {
-      throw new Error(`Theme ${vfs.themeId}: VFS is missing proof/${id}.json.`);
     }
   }
 

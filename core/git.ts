@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { statSync } from 'node:fs';
-import { anchorNoteSchema, type AnchorNote } from './schema.ts';
+import { ANCHORS_BRANCH, ANCHORS_FILE, parseAnchorIndex } from './anchor-index.ts';
+import type { AnchorRecord } from './schema.ts';
 
 export interface FileCommit {
   commit: string;
@@ -130,49 +131,46 @@ export function getFileMtimeMs(absPath: string): number {
   return statSync(absPath).mtimeMs;
 }
 
-export interface ReadAnchorsResult {
-  anchors: Map<string, AnchorNote>;
+export interface ReadAnchorRecordsResult {
+  records: AnchorRecord[];
   warnings: string[];
+  sources: string[];
+  branchFound: boolean;
 }
 
 /**
- * Read refs/notes/blockchain. The note body is a single-line JSON object.
- * Malformed notes are reported as warnings and ignored.
+ * Read anchors.ndjson from the local `anchors` branch, falling back to
+ * `origin/anchors`. Malformed lines and missing files are warnings.
  */
-export function readAnchorNotes(root: string): ReadAnchorsResult {
-  const anchors = new Map<string, AnchorNote>();
+export function readAnchorRecords(root: string): ReadAnchorRecordsResult {
+  const records: AnchorRecord[] = [];
   const warnings: string[] = [];
+  const sources: string[] = [];
+  const seen = new Set<string>();
+  let branchFound = false;
 
-  const list = tryRunGitText(['notes', '--ref=blockchain', 'list'], root);
-  if (!list) return { anchors, warnings };
+  for (const ref of [
+    `refs/heads/${ANCHORS_BRANCH}`,
+    `refs/remotes/origin/${ANCHORS_BRANCH}`,
+  ]) {
+    const oid = tryRunGitText(['rev-parse', '--verify', '--quiet', ref], root)?.trim();
+    if (!oid || seen.has(oid)) continue;
+    seen.add(oid);
+    branchFound = true;
 
-  for (const line of list.split('\n').filter(Boolean)) {
-    const parts = line.trim().split(/\s+/u);
-    const objectSha = parts[1];
-    if (!objectSha) continue;
-
-    const body = tryRunGitText(['notes', '--ref=blockchain', 'show', objectSha], root);
-    if (!body) continue;
-
-    try {
-      const parsed = anchorNoteSchema.parse(JSON.parse(body.trim()));
-      if (parsed.commit.toLowerCase() !== objectSha.toLowerCase()) {
-        warnings.push(
-          `Anchor note for ${objectSha.slice(0, 7)} reports commit ${parsed.commit.slice(0, 7)}; ignored.`,
-        );
-        continue;
-      }
-      anchors.set(objectSha, parsed);
-    } catch (error) {
-      warnings.push(
-        `Malformed anchor note on ${objectSha.slice(0, 7)}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+    const body = tryRunGitText(['show', `${ref}:${ANCHORS_FILE}`], root);
+    if (body === null) {
+      warnings.push(`Anchor branch ${ref} exists but ${ANCHORS_FILE} is missing.`);
+      continue;
     }
+
+    sources.push(ref);
+    const parsed = parseAnchorIndex(body);
+    records.push(...parsed.records);
+    warnings.push(...parsed.warnings.map((warning) => `${ref}: ${warning}`));
   }
 
-  return { anchors, warnings };
+  return { records, warnings, sources, branchFound };
 }
 
 export function isWorkingTreeClean(root: string): boolean {
