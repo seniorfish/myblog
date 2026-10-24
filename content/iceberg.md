@@ -63,10 +63,14 @@ draft: false
 3. 现在我们穷尽手段，把这一部分的速度提高了 $k$ 倍（即这一部分耗时缩短为原来的 $\frac{1}{k}$）。
 
 那么，优化后的新总耗时 $T_{\text{new}}$ 为：
-$$T_{\text{new}} = (1 - \alpha)T_{\text{old}} + \frac{\alpha T_{\text{old}}}{k} = T_{\text{old}}\left[(1 - \alpha) + \frac{\alpha}{k}\right]$$
+$$
+T_{\text{new}} = (1 - \alpha)T_{\text{old}} + \frac{\alpha T_{\text{old}}}{k} = T_{\text{old}}\left[(1 - \alpha) + \frac{\alpha}{k}\right]
+$$
 
 由此可以得到著名的整体加速比公式：
-$$S = \frac{T_{\text{old}}}{T_{\text{new}}} = \frac{1}{(1 - \alpha) + \frac{\alpha}{k}}$$
+$$
+S = \frac{T_{\text{old}}}{T_{\text{new}}} = \frac{1}{(1 - \alpha) + \frac{\alpha}{k}}
+$$
 
 由于本网站部署在 Cloudflare 上，而在我先前的实测中，其 anycast 路由在国内通常落到美国西海岸节点圣何塞，RTT 在 200ms 左右。首次访问需要 TCP 三次握手（1 RTT）、TLS 1.3 握手（1 RTT）与 HTTP 请求到首字节响应 TTFB（1 RTT），合计 3 个 RTT，乐观取 600ms；网页本身的渲染耗时，本机 Chrome 实测的首页 LCP 约为 135ms（这是纯本地测量，不含网络往返）。把两者相加，首访的总等待粗略计为 735ms。假设我们动用“外星科技”，将渲染时间惊人地加速整整 3 倍，用户等待的总时间也只是从 735ms 变成 645ms，省下 90ms。单看“网页渲染”这一项，速度确实提高了 3 倍，可用户实际感知到的整体提升只有 12%。更让人难以接受的是取极限的情况：$k \to \infty$ 时，$S_{\max} = \frac{1}{1 - \alpha} = \frac{1}{0.816} \approx 1.22$，此时 $T_{\text{new}} \to 600\text{ ms}$。也就是说，就算我们把渲染优化到“零耗时”——这当然不可能—— 总耗时也就减少 18.4%，却是渲染优化所能达到的上限。
 
