@@ -5,6 +5,11 @@
  * serves navigations and same-origin assets from the active theme's VFS.
  */
 
+import {
+  SELF_DESTRUCT_TTL_MS,
+  shouldSelfDestruct,
+} from './self-destruct.ts';
+
 declare const __SW_CHECK_INTERVAL_MS__: number;
 declare const __SW_BUILD__: string;
 
@@ -16,8 +21,13 @@ const STORE = 'meta';
 const STATE_KEY = 'state';
 const VFS_PREFIX = 'myblog-vfs-v1:';
 const MEDIA_CACHE = 'myblog-media-v1';
+const LIFECYCLE_CACHE = 'myblog-lifecycle-v1';
+const FIRST_SEEN_PATH = '/__myblog-sw/first-seen';
 const CHECK_INTERVAL_MS = __SW_CHECK_INTERVAL_MS__;
 const SW_BUILD = __SW_BUILD__;
+
+/** Set once the TTL reset starts; all cache reads must bypass Cache Storage. */
+let selfDestructed = false;
 
 interface ManifestTheme {
   id: string;
@@ -111,6 +121,37 @@ async function writeState(state: State): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+/** The first-activation timestamp lives in its own tiny Cache Storage entry. */
+function firstSeenUrl(): string {
+  return new URL(FIRST_SEEN_PATH, sw.location.origin).toString();
+}
+
+async function readFirstSeen(): Promise<number | null> {
+  try {
+    const cache = await caches.open(LIFECYCLE_CACHE);
+    const response = await cache.match(firstSeenUrl());
+    if (!response) return null;
+
+    const data = (await response.json()) as { firstSeenMs?: unknown } | null;
+    return typeof data?.firstSeenMs === 'number' && Number.isFinite(data.firstSeenMs)
+      ? data.firstSeenMs
+      : null;
+  } catch (error) {
+    console.warn('[sw] failed to read the first-seen timestamp', error);
+    return null;
+  }
+}
+
+async function writeFirstSeen(firstSeenMs: number): Promise<void> {
+  const cache = await caches.open(LIFECYCLE_CACHE);
+  await cache.put(
+    firstSeenUrl(),
+    new Response(JSON.stringify({ firstSeenMs }), {
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -266,7 +307,7 @@ async function matchVfs(
   themeId: string,
   path: string,
 ): Promise<Response | null> {
-  if (!releaseId || !themeId) return null;
+  if (selfDestructed || !releaseId || !themeId) return null;
   const cache = await caches.open(cacheName(releaseId, themeId));
   const url = new URL(path, sw.location.origin).toString();
   const direct = await cache.match(new Request(url));
@@ -384,7 +425,71 @@ async function notify(message: unknown): Promise<void> {
   for (const client of clients) client.postMessage(message);
 }
 
+/**
+ * Resets this origin's Cache Storage and unregisters the worker. Clearing the
+ * lifecycle cache also clears the first-seen timestamp, so the next
+ * registration starts a fresh seven-day window.
+ */
+async function selfDestruct(nowMs: number, firstSeenMs: number): Promise<void> {
+  selfDestructed = true;
+  console.info(
+    `[sw] seven-day TTL reached (${nowMs - firstSeenMs}ms); resetting caches and unregistering`,
+  );
+
+  try {
+    const names = await caches.keys();
+    await Promise.allSettled(names.map((name) => caches.delete(name)));
+  } catch (error) {
+    console.warn('[sw] failed to clear caches during self-destruct', error);
+  }
+
+  try {
+    await notify({
+      type: 'CACHE_RESET',
+      reason: 'ttl',
+      firstSeenMs,
+      nowMs,
+      ttlMs: SELF_DESTRUCT_TTL_MS,
+    });
+  } catch (error) {
+    console.warn('[sw] failed to notify clients about the cache reset', error);
+  }
+
+  try {
+    await sw.registration.unregister();
+  } catch (error) {
+    console.warn('[sw] failed to unregister during self-destruct', error);
+  }
+}
+
+/**
+ * Highest-priority lifecycle check. Returns true when the worker has just
+ * reset itself, so callers must stop their normal update flow.
+ */
+async function checkSelfDestruct(): Promise<boolean> {
+  if (selfDestructed) return true;
+
+  const nowMs = Date.now();
+  const firstSeenMs = await readFirstSeen();
+  if (firstSeenMs === null) {
+    try {
+      await writeFirstSeen(nowMs);
+    } catch (error) {
+      console.warn('[sw] failed to record the first-seen timestamp', error);
+    }
+    return false;
+  }
+
+  if (!shouldSelfDestruct(firstSeenMs, nowMs, SELF_DESTRUCT_TTL_MS)) return false;
+
+  await selfDestruct(nowMs, firstSeenMs);
+  return true;
+}
+
 async function checkForUpdate(force = false): Promise<void> {
+  // The seven-day reset takes precedence over every update path.
+  if (await checkSelfDestruct()) return;
+
   const state = await readState();
   if (!state?.manifest) return;
 
@@ -513,6 +618,9 @@ sw.addEventListener('install', (event) => {
 sw.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // Do not run this during install: the worker must finish installation
+      // first. Activation is the earliest point where a reset is safe.
+      if (await checkSelfDestruct()) return;
       await sw.clients.claim();
     })(),
   );

@@ -206,6 +206,7 @@ class ThemeDock extends HTMLElement {
   private status!: HTMLDivElement;
   private state: StateResponse | null = null;
   private loading = false;
+  private cacheResetNotice = false;
 
   constructor() {
     super();
@@ -245,6 +246,10 @@ class ThemeDock extends HTMLElement {
     if (event.data?.type === 'UPDATE_READY') {
       if (this.state) this.state.updateReady = true;
       this.updateStatus();
+    }
+
+    if (event.data?.type === 'CACHE_RESET') {
+      this.showCacheReset();
     }
   };
 
@@ -402,6 +407,11 @@ class ThemeDock extends HTMLElement {
   }
 
   private updateStatus(message?: string): void {
+    if (this.cacheResetNotice) {
+      this.showCacheReset();
+      return;
+    }
+
     if (!this.state) return;
 
     this.status.replaceChildren();
@@ -477,6 +487,22 @@ class ThemeDock extends HTMLElement {
         `检查失败：${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  private showCacheReset(): void {
+    this.cacheResetNotice = true;
+    this.status.replaceChildren();
+
+    const text = document.createElement('span');
+    text.textContent = '缓存已重置，刷新后生效';
+
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'refresh';
+    refresh.textContent = '刷新';
+    refresh.addEventListener('click', () => location.reload());
+
+    this.status.append(text, refresh);
   }
 
   private setStatus(message: string): void {
