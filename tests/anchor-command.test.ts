@@ -13,6 +13,7 @@ import {
   parseAnchorReceipt,
   parseLogArray,
   parseQuantity,
+  resolveLogFromBlock,
 } from '../scripts/blog/anchor-cast.ts';
 import { mergeAnchorTexts } from '../scripts/blog/anchor-git.ts';
 import { redactText } from '../scripts/shared/process.ts';
@@ -124,6 +125,30 @@ describe('buildAnchorSendArgs', () => {
       'secret',
     ]);
     expect(built.secrets).toEqual(['secret']);
+  });
+});
+
+describe('resolveLogFromBlock', () => {
+  it('keeps the full range when no lookback is requested', () => {
+    expect(resolveLogFromBlock({ deployBlock: 100, latestBlock: 500 })).toBe(100);
+    expect(
+      resolveLogFromBlock({ deployBlock: 100, latestBlock: 500, lookbackBlocks: 0 }),
+    ).toBe(100);
+  });
+
+  it('scans the requested recent window', () => {
+    expect(
+      resolveLogFromBlock({ deployBlock: 100, latestBlock: 500, lookbackBlocks: 10 }),
+    ).toBe(491);
+  });
+
+  it('never goes below the deploy block', () => {
+    expect(
+      resolveLogFromBlock({ deployBlock: 100, latestBlock: 105, lookbackBlocks: 10 }),
+    ).toBe(100);
+    expect(
+      resolveLogFromBlock({ deployBlock: 100, latestBlock: 50, lookbackBlocks: 10 }),
+    ).toBe(100);
   });
 });
 

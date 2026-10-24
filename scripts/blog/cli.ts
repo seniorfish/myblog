@@ -864,6 +864,7 @@ const anchorCommand = defineCommand({
     passwordFile: { type: 'string' },
     privateKeyEnv: { type: 'string' },
     confirmations: { type: 'string' },
+    lookbackBlocks: { type: 'string' },
     dryRun: { type: 'boolean', default: false },
     recoverOnly: { type: 'boolean', default: false },
     forceResend: { type: 'boolean', default: false },
@@ -900,6 +901,15 @@ const anchorCommand = defineCommand({
       }
     }
 
+    let lookbackBlocks: number | undefined;
+    if (args.lookbackBlocks !== undefined) {
+      lookbackBlocks = Number(args.lookbackBlocks);
+      if (!Number.isInteger(lookbackBlocks) || lookbackBlocks < 1) {
+        fail('--lookback-blocks 必须是正整数。', 2);
+        return;
+      }
+    }
+
     try {
       const result = await anchorCommit({
         root: process.cwd(),
@@ -914,6 +924,7 @@ const anchorCommand = defineCommand({
         rpcUrl: args.rpcUrl,
         contract: args.contract,
         confirmations,
+        lookbackBlocks,
         dryRun: Boolean(args.dryRun),
         recoverOnly: Boolean(args.recoverOnly),
         forceResend: Boolean(args.forceResend),

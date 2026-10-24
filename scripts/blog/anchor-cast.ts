@@ -238,6 +238,25 @@ export interface AnchorEvent {
   blockTimestamp: number | null;
 }
 
+/** Resolve the lowest block to scan for a bounded chain check. */
+export function resolveLogFromBlock(input: {
+  deployBlock: number;
+  latestBlock: number;
+  lookbackBlocks?: number;
+}): number {
+  const { deployBlock, latestBlock, lookbackBlocks } = input;
+  if (lookbackBlocks === undefined || lookbackBlocks <= 0) return deployBlock;
+  return Math.max(deployBlock, latestBlock - lookbackBlocks + 1);
+}
+
+/** Read the current head block number. */
+export function getBlockNumber(rpcUrl: string): number {
+  const result = runProcess('cast', ['block-number', '--rpc-url', rpcUrl], {
+    timeoutMs: 30_000,
+  });
+  return parseQuantity(result.stdout.trim());
+}
+
 /** Enumerate matching anchor events from the contract, lowest block first. */
 export async function findAnchorEvents(input: {
   contract: string;
@@ -245,11 +264,22 @@ export async function findAnchorEvents(input: {
   commit: string;
   rpcUrl: string;
   deployBlock: number;
+  lookbackBlocks?: number;
 }): Promise<AnchorEvent[]> {
+  const lookback = input.lookbackBlocks ?? 0;
+  const latestBlock = lookback > 0 ? getBlockNumber(input.rpcUrl) : null;
+  const fromBlock =
+    latestBlock === null
+      ? input.deployBlock
+      : resolveLogFromBlock({
+          deployBlock: input.deployBlock,
+          latestBlock,
+          lookbackBlocks: lookback,
+        });
   const filter = {
     address: input.contract.toLowerCase(),
-    fromBlock: `0x${input.deployBlock.toString(16)}`,
-    toBlock: 'latest',
+    fromBlock: `0x${fromBlock.toString(16)}`,
+    toBlock: latestBlock === null ? 'latest' : `0x${latestBlock.toString(16)}`,
     topics: [
       ANCHOR_EVENT_TOPIC0,
       encodeAddressTopic(input.sender),

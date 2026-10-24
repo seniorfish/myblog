@@ -29,6 +29,7 @@ export interface AnchorOptions {
   rpcUrl?: string;
   contract?: string;
   confirmations?: number;
+  lookbackBlocks?: number;
   dryRun?: boolean;
   recoverOnly?: boolean;
   noPush?: boolean;
@@ -262,6 +263,7 @@ export async function anchorCommit(options: AnchorOptions): Promise<AnchorResult
         commit,
         rpcUrl,
         deployBlock: config.chain.deployBlock,
+        lookbackBlocks: options.lookbackBlocks,
       });
       event = events[0];
     } catch (error) {
