@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
-      - 'theme/**'
+      # Theme branches carry no workflow file, so a push there cannot start
+      # this workflow. Their changes are picked up by the next main push,
+      # a manual dispatch, or the daily run.
   workflow_dispatch:
   schedule:
     # Daily safety net; the 30-minute polling loop was removed.

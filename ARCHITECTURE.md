@@ -168,7 +168,7 @@ SiteData ──► build/generated/
 
 - `npm run serve`：静态服务器，模拟 clean URL、SW 头与 `_headers` 缓存策略。
 - `npm run test:e2e`：`playwright-core` + 本机 Chrome，验证默认主题 → SW 接管 → 切主题 → URL 不变 → 断网导航。
-- CI：`.github/workflows/build.yml` 在 main / theme 分支 push、手动触发或每日兜底时构建；`content/` 变化时先锚定，再由无密钥的 build job 构建并上传 artifact，最后由独立 deploy job 发布。
+- CI：`.github/workflows/build.yml` 在 main push、手动触发或每日兜底时构建。主题分支没有自己的 workflow 文件，主题 push 不会直接触发；其改动由下一次 main push、手动 dispatch 或每日任务带入。`content/` 变化时先锚定，再由无密钥的 build job 构建并上传 artifact，最后由独立 deploy job 发布。
 
 ## 7. 部署与缓存
 
