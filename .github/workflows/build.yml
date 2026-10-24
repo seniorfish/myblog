@@ -119,10 +119,19 @@ jobs:
           ANCHOR_PRIVATE_KEY: ${{ secrets.ANCHOR_PRIVATE_KEY }}
           ANCHOR_RPC_URL: ${{ vars.ANCHOR_RPC_URL || 'https://base-rpc.publicnode.com' }}
         run: |
-          npm run blog -- anchor \
+          if npm run blog -- anchor \
             --commit "$GITHUB_SHA" \
             --yes --json \
             --private-key-env ANCHOR_PRIVATE_KEY \
+            --rpc-url "$ANCHOR_RPC_URL" \
+            --author-name "github-actions[bot]" \
+            --author-email "41898282+github-actions[bot]@users.noreply.github.com"; then
+            exit 0
+          fi
+          echo "::warning::anchor command failed; checking whether the transaction landed before retrying"
+          npm run blog -- anchor \
+            --commit "$GITHUB_SHA" \
+            --recover-only --json \
             --rpc-url "$ANCHOR_RPC_URL" \
             --author-name "github-actions[bot]" \
             --author-email "41898282+github-actions[bot]@users.noreply.github.com"
