@@ -1,250 +1,96 @@
 # myblog
 
-一个面向 AI 主题生成、Git/链上时间戳与本地优先体验的个人博客。
+一个面向 AI 协作、Git/链上时间戳与本地优先体验的个人博客。线上：<https://chenbase.cc>。
 
-当前状态：**M1 + M2 已完成；M3 链上锚定已接入**。
+## 特性
 
-- M1：内容编译器、默认主题、本地开发与静态构建。
-- M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
-- 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件元数据 / 语言优化）。
-- M3 链上存证：Base 主网事件合约 + `anchors` 分支索引 + CI 自动锚定（已完成）。
-- 部署：Cloudflare Pages 项目 `chenbase-blog`，生产域名 <https://chenbase.cc>（`www` 同样可用）；R2 图床待做。
+- **内容编译**：Markdown 正文 + `.meta.yml` 元数据；主 Tag 决定形态，`extends` 表达后续进展。
+- **可验证的时间**：时间来自 Git 提交；内容 commit 锚定到 Base 主网事件合约，页面提供三步核验。
+- **多主题与离线**：主题是独立的孤儿分支；构建产出 VFS，Service Worker 负责站内零延迟、主题切换与离线访问。
+- **写作工具**：`npm run blog` 管仓库与 Git，`npm run ai` 管单文件元数据 / id / 语言建议。
+- **静态部署**：Cloudflare Pages，CI 在内容推送后自动锚定、构建并发布。
 
 ## 快速开始
 
 要求 Node.js >= 22.22。
 
 ```powershell
-cd repo
+git clone https://github.com/seniorfish/myblog.git
+cd myblog
 npm install
 npm run dev
 ```
 
-`npm run dev` 编译内容、把共享工具链注入 `.worktrees/default`，然后在默认主题 worktree 里启动 Astro dev。若 4321 端口被占用，Astro 会打印实际端口。
+`npm run dev` 编译内容、把共享工具链注入 `.worktrees/default`，然后在默认主题 worktree 里启动 Astro dev。开发另一个主题用 `npm run dev -- terminal`。
 
-开发另一个主题：
-
-```powershell
-npm run dev -- terminal
-```
-
-## 写作工作流
-
-推荐使用两个命令，各自负责一层：
-
-- `npm run blog`：仓库级状态机。检查 Git、创建模板、校验、提交、推送。
-- `npm run ai`：文件级 AI 助手。补全 `*.meta.yml`、建议语义化 id（slug）、给语言建议或改写正文；不做 Git 操作。
-
-典型流程：
+## 写作
 
 ```powershell
-npm run blog      # 干净工作区时复制模板并打开编辑器
-npm run ai        # 选择文件 → 元数据 → 勾选本轮字段
+npm run blog      # 检查工作区；干净时复制模板并打开编辑器
+npm run ai        # 选择文件 → 元数据 / id 建议 / 语言优化
 npm run blog      # 校验并提交
 ```
 
-也可以自由组合非交互子命令：
+`npm run blog` 负责 Git 与文件状态；`npm run ai` 只处理单个文件，不执行 Git。日期不允许手写，正文与元数据分开存放，具体规则见 [CONTENT.md](CONTENT.md)。
+
+## 构建与命令
 
 ```powershell
-npm run blog -- status --json
-npm run blog -- check --json
-npm run blog -- new --no-commit
-npm run blog -- save content/new-blog.md
-npm run blog -- pull
-npm run blog -- push --yes
-
-npm run blog -- anchor --commit <sha> --dry-run --json
-npm run blog -- anchor --commit <sha> --yes --json
-npm run blog -- anchor --commit <sha> --recover-only --no-push --json
-
-npm run ai -- frontmatter content/new-blog.md --fields tags,description --json
-npm run ai -- frontmatter content/new-blog.md --fields tags,description --write
-npm run ai -- slug content/new-blog.md --json
-npm run ai -- slug content/new-blog.md --write
-npm run ai -- slug content/new-blog.md --id bing-shan --write
-npm run ai -- language content/foo.md --mode proofread --output advice --json
-npm run ai -- language content/foo.md --mode concise --output rewrite --write
+npm run build       # 只构建默认主题 -> dist/
+npm run build:all   # 构建所有 theme/* + VFS + manifest -> dist/
+npm run serve       # 本地静态服务器（默认 8080）
+npm run test        # Vitest
+npm run test:e2e    # 无头 Chrome 端到端（需要本机 Chrome）
+npm run typecheck   # 主程序 + Service Worker
 ```
 
-`npm run blog -- anchor` 默认只做预检或从链上事件回填；`--yes` 才会真正发交易。CI 在 `content/` 推送时自动完成锚定。
+`package.json` 是命令的准确来源；`npm run contract:test` 运行 Foundry 合约测试，`npm run deploy:pages` 直传 Cloudflare Pages。
 
-`npm run ai -- slug` 会把中文标题/正文转成拼音或英文 slug。id 只允许 ASCII，纯中文标题直接用 `slugify` 会退化为 `post-xxxxxxxx`；`--write` 会同时重命名 `.md` 与 `.meta.yml`，`--id` 可跳过 AI 手动指定。
+## 主题
 
-`npm run ai` 使用 `DEEPSEEK_API_KEY`，模型默认 `deepseek-flash`：
-
-```powershell
-$env:DEEPSEEK_API_KEY = '你的 key'
-$env:DEEPSEEK_MODEL = 'deepseek-flash'   # 可选
-```
-
-密钥只放环境变量，不进入仓库、`.env`、对话或构建产物。构建和 CI 都不调用 AI。
-
-模板在 `templates/new-blog.md`，`content/new-blog.md` 是保留的临时 id；提交前会要求改成正式 slug。
-
-可选安装内容校验钩子（只校验，不调用 AI）：
-
-```powershell
-npm run hooks:install
-```
-
-## 构建与预览
-
-```powershell
-npm run build       # 只构建默认主题，输出 dist/
-npm run build:all   # 构建所有 theme/*，打包 VFS + manifest，组装完整 dist/
-npm run serve       # 本地静态服务器，默认 http://127.0.0.1:8080
-npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 → 断网可用
-```
-
-`npm run test:e2e` 需要本机 Chrome；可通过 `CHROME_PATH` 指定路径。
-
-其他命令：
-
-| 命令 | 作用 |
-| --- | --- |
-| `npm run blog` | 交互式检查/创建/提交/推送内容 |
-| `npm run ai` | 交互式元数据 / id 建议 / 语言优化 |
-| `npm run hooks:install` | 安装内容校验 pre-commit 钩子 |
-| `npm run compile` | 只运行内容编译器 |
-| `npm run migrate:meta` | 一次性迁移：把旧 frontmatter 拆到 `.meta.yml`（默认 dry run） |
-| `npm run prepare-theme -- <id>` | 准备某个主题的 worktree 与依赖 |
-| `npm test` | Vitest 单元/集成测试 |
-| `npm run typecheck` | 主程序 + Service Worker 类型检查 |
-| `npm run build:runtime` | 单独构建 `host/sys.ts` 与 `sw/sw.ts` |
-| `npm run deploy:pages` | 把 `dist/` 直传到 Cloudflare Pages（需 `CLOUDFLARE_API_TOKEN`） |
-
-## 首页与索引
-
-- `content/home.md`（主 Tag `首页`，可在 `site.config.ts` 的 `homeTag` 修改）渲染在 `/`，用来写自我介绍。
-- 全站只能有一个已发布的首页节点；它会从索引、RSS、sitemap、搜索中排除。
-- 文章索引在 `/archive`，页头有“索引”链接。
-- 首页节点不生成 `/n/{id}` 详情页；存证信息在页面底部的修订框里。
-
-## Service Worker 更新
-
-### 开发期
-
-- 本地 `npm run build:all` 默认把内容更新检查间隔设为 **1000ms**；CI 设为 **30 分钟**。
-- 如需覆盖：
-
-  ```powershell
-  $env:SW_CHECK_INTERVAL_MS = 1000
-  npm run build:all
-  ```
-
-- 每次本地构建默认生成新的 `SW_BUILD_ID`（时间戳），`sw.js` 字节会变化，浏览器下次加载会安装新 worker；CI 使用 commit SHA。
-- 打开主题 dock，点“检查”可强制立即检查 `manifest.json`；有新内容时会出现“刷新”。
-- 控制台会打印 `[sw] build ...; update check interval ...ms`，可据此确认版本与间隔。
-
-### 生产环境
-
-访客**不需要**手动卸载 Service Worker：
-
-- 每次页面加载或标签页重新可见时，`sys.js` 会调用 `registration.update()` 检查 `sw.js`，并向 worker 发送一个遵守 TTL 的 `SOFT_CHECK`。
-- 新 `sw.js` 使用 `skipWaiting()` + `clients.claim()`；如果构建 release 变了，dock 会显示“有新内容，刷新后生效”。访客点刷新或下一次导航即可。
-- 内容更新检查在生产是 30 分钟惰性节流；页面重新可见会触发 `SOFT_CHECK`，但仍受 30 分钟 TTL 限制。
-- 如果标签页一直开着、既不导航也不重新可见，可能不会立刻看到更新；下次访问/刷新会拿到最新版本。
-- 极端情况下（浏览器或代理缓存异常）仍可在 DevTools 里 Update/Unregister，但这只是排障手段，不是正常访客流程。
-
-CI 每次部署都会改变 `SW_BUILD_ID`（commit SHA），因此 `sw.js` 字节会变；即使内容 release 没变，新 worker 也会被浏览器发现并接管。
-
-## 部署（Cloudflare Pages）
-
-生产站点：<https://chenbase.cc>（Cloudflare Pages 项目 `chenbase-blog`，`www.chenbase.cc` 指向同一项目）。
-
-- CI：`build` 产出 `dist`，`deploy` job 用 `cloudflare/wrangler-action` 直传；只有 deploy job 读 `CLOUDFLARE_API_TOKEN`，`build` 保持无密钥。
-- 需要的仓库 secret：`CLOUDFLARE_API_TOKEN`（仅 `Pages:Edit`）与 `CLOUDFLARE_ACCOUNT_ID`。
-- 本地手动发布：`npm run deploy:pages`（同样从环境变量读 token）。
-- 缓存策略来自 `dist/_headers`：`manifest.json` / `sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 一年 immutable。
-- DNS 在阿里云（`chenbase.cc` 不是 Cloudflare zone），因此根域名用 **CNAME `@` → `chenbase-blog.pages.dev`**；Cloudflare 已验证并签发证书。`www` 同法。改动 DNS 前先确认没有其他 `@` 记录。
-
-## 主题博物馆
-
-M2 内置两个主题：
-
-- `theme/default`：Default Minimal，默认铺在根路径。
-- `theme/terminal`：Terminal，深色等宽终端风。
-
-构建后 `dist/` 同时包含：
-
-```text
-index.html / n/*.html / 404.html     # 默认主题（SEO 直出）
-_themes/default.<sha>.vfs.json       # 全站文本 VFS
-_themes/terminal.<sha>.vfs.json
-manifest.json                        # releaseId + 主题元数据
-sw.js                                # Service Worker
-_sys/sys.js                          # 主题 dock + SW 注册
-_headers                             # Cloudflare Pages 缓存策略
-search-index.json                    # 共享搜索索引
-```
-
-浏览器首次加载默认主题；Service Worker 激活后，右下角出现 `Themes` 胶囊。切换主题时 URL 不变，SW 从本地 VFS 返回目标主题的 HTML/CSS/JS。已缓存过的站内导航与断网导航都不需要网络。
+内置 `theme/default`（Default Minimal）与 `theme/terminal`（Terminal）。主题分支只放 UI；harness、数据契约与生成数据由 `scripts/prepare-theme.ts` 注入。新建主题见 [THEME_AGENT_PROMPT.md](THEME_AGENT_PROMPT.md)。
 
 ## 仓库结构
 
 ```text
 content/          正文 .md + 元数据 .meta.yml
 core/             编译器、契约、Git/锚定、VFS 纯逻辑
-host/             sys-theme-dock 宿主组件（TypeScript）
-sw/               Service Worker（TypeScript）
-scripts/          compile / prepare-theme / dev / build / build-all / serve / e2e
+host/             sys-theme-dock 宿主组件
+sw/               Service Worker
+scripts/          compile / dev / build / build-all / serve / e2e
 scripts/blog/     npm run blog：仓库状态机与 Git 操作
 scripts/ai/       npm run ai：DeepSeek 元数据 / id / 语言建议
-scripts/shared/   两个 CLI 共享的解析、Git、diff、slug 与编辑器工具
-templates/        new-blog.md + new-blog.meta.yml 模板（不参与编译）
-.githooks/        可选的内容校验 pre-commit 钩子
 theme-harness/    Astro + Tailwind 共享工具链（main）
+contracts/        事件合约、Foundry 测试与部署记录
 tests/            Vitest
-.worktrees/       theme/* 分支的本地 worktree（gitignore）
-build/generated/  编译器产物（gitignore）
-build/runtime/    sys.js / sw.js（gitignore）
-dist/             最终部署产物（gitignore）
 ```
 
-## 分支
+## 部署
 
-- `main`：内容、编译器、契约、运行时、构建脚本、文档。
-- `theme/default`：默认主题 UI（孤儿分支）。
-- `theme/terminal`：终端风参考主题（孤儿分支）。
+- Cloudflare Pages 项目 `chenbase-blog`，生产域名 <https://chenbase.cc>（`www` 同一项目）。
+- CI：`content/` 变化时先锚定，再由无密钥的 build job 构建；独立的 deploy job 用 `wrangler pages deploy` 发布。
+- 仓库 secret：`CLOUDFLARE_API_TOKEN`（仅 Pages 权限）与 `CLOUDFLARE_ACCOUNT_ID`，只有 deploy job 读取。
+- 本地发布：`CLOUDFLARE_API_TOKEN=... npm run deploy:pages`。
+- 缓存策略来自 `dist/_headers`：`manifest.json` / `sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 长期 immutable。
 
-主题分支只提交 `src/`、`public/`、`theme.contract.json`、可选 `theme.package.json`、`AGENTS.md`；harness 与 `src/generated/` 由脚本注入并忽略。
-
-## 离线与缓存边界
-
-- 离线保证 HTML/CSS/JS、search-index 等**文本**可用。
-- R2 图片只有被访问过才在本地缓存（M3）。
-- 更新检查是**惰性**的：只在导航/页面可见时执行，且距上次检查至少 30 分钟；SW 休眠时不保证按时轮询。
-- VFS 单文件硬上限 25MB（Cloudflare Pages）；初期约 110KB/主题。
-
-## 内容与时间
-
-- 内容只写标准 Markdown；每篇正文旁边有一个同名 `.meta.yml`，至少要有 `tags`。
-- **不允许手写日期**。时间来自 Git 提交；已锚定版本以区块时间为权威。
-- 主 Tag 决定形态：`文章`、`想法`、`闪念`、`收藏`，也允许未来任意新 Tag；没有专门样式时自动回退。
-- 新进展通过 `extends` 新建节点，不直接改写旧文章。
-
-详见 [CONTENT.md](CONTENT.md)。
+更完整的信任边界与缓存设计见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 链上存证
 
-- 合约：Base 主网 `0x00000000009DE13419D7CFf80F6D2e1e992146aA`（deploy block 53014502），只发 `Anchored(address indexed sender, bytes32 indexed commit)` 事件。
-- 索引：`anchors` 孤儿分支的 `anchors.ndjson`；构建离线读取，页面显示 tx / 合约 / 签名地址 / Git blob SHA-1。
-- CI 在 `content/` 推送时自动锚定；只有 anchor job 读 Environment secret `ANCHOR_PRIVATE_KEY`。
-- 本地：`--dry-run` 只预检；`--recover-only` 从链上事件回填索引；`--yes` 才发交易。
-- 三步核验：链上事件 → GitHub commit/文件 → 比对 blob SHA-1。私有仓库阶段 GitHub 链接对外 404，公开后才完整。
+- 合约：Base 主网 `0x00000000009DE13419D7CFf80F6D2e1e992146aA`，只发 `Anchored(address indexed sender, bytes32 indexed commit)` 事件。
+- 索引：孤儿分支 `anchors` 的 `anchors.ndjson`；构建离线读取，链上事件可重建索引。
+- 页面显示 tx、合约、签名地址与 Git blob SHA-1，可按“链上事件 → GitHub commit/文件 → 比对 blob SHA-1”核验。
+- 合约细节、commit 编码与部署记录见 [contracts/README.md](contracts/README.md)。
 
-## 设计文档
+## 文档
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构、M1/M2 实现、M3 实现与边界。
-- [AGENTS.md](AGENTS.md)：给未来 AI 的工作约束。
-- [contracts/README.md](contracts/README.md)：事件合约、部署记录与 commit 补零约定。
+- [ARCHITECTURE.md](ARCHITECTURE.md)：数据流、主题/VFS/Service Worker、部署与边界。
+- [AGENTS.md](AGENTS.md)：贡献者与 AI 的工作约束。
+- [CONTENT.md](CONTENT.md)：写作流程与元数据规范。
 - [THEME_AGENT_PROMPT.md](THEME_AGENT_PROMPT.md)：新主题的复制即用提示词。
+- [contracts/README.md](contracts/README.md)：事件合约与部署。
 
-## 语言约定
+## 约定
 
-- 代码注释、变量名、提交信息：英文。
-- 文档与站点 UI 文案：中文。
-
-## 安全
-
-私钥、助记词与 keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。开发时用本机加密 keystore；CI 只在 anchor job 的 Environment secret 里保存 burner 私钥，build job 不接触 secret。详见 `ARCHITECTURE.md` 与 `contracts/README.md`。
+- 代码注释、变量名、提交信息用英文；文档与站点 UI 文案用中文。
+- 私钥、助记词与 keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。详见 [AGENTS.md](AGENTS.md)。

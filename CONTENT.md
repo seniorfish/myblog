@@ -17,14 +17,15 @@ npm run blog      # 校验并提交
 - 模板文件在 `templates/new-blog.md` 与 `templates/new-blog.meta.yml`；正文里的 `<!-- new-blog-template -->` 标记要在完成正文后删除。
 - AI 使用 `DEEPSEEK_API_KEY`，只在写作时调用；构建和 CI 不调用模型。
 
+  ```powershell
+  $env:DEEPSEEK_API_KEY = '你的 key'
+  ```
+
 常用非交互命令：
 
 ```powershell
 npm run blog -- check --json
-npm run blog -- save content/foo.md --json
 npm run ai -- frontmatter content/foo.md --fields tags,description --json
-npm run ai -- frontmatter content/foo.md --fields tags,description --write
-npm run ai -- slug content/foo.md --json
 npm run ai -- slug content/foo.md --write
 npm run ai -- language content/foo.md --mode proofread --output advice --json
 ```
@@ -63,12 +64,10 @@ draft: false
 
 AI 补全规则：
 
-- AI 只写 `*.meta.yml`，不改正文。
-- 默认只补缺失字段；已有内容不覆盖。
-- `tags` 是必填；AI 会优先复用已有 Tag。
-- `extends` 只给候选，写入前必须确认。
-- `description`、`title` 由正文推导，不编造事实。
-- `draft`、`aliases` 不由 AI 自动生成。
+- AI 只写 `*.meta.yml`，不改正文；默认只补缺失字段，不覆盖已有内容。
+- `tags` 必填，优先复用已有 Tag；`extends` 只给候选，写入前必须确认。
+- `description` / `title` 从正文推导，不编造事实；`draft` / `aliases` 不由 AI 生成。
+- 所有提案必须经用户确认；`--write` 才落盘。
 
 ## 首页（主 Tag: 首页）
 
@@ -155,15 +154,9 @@ npm run dev
 
 修改 `content/` 后，`dev.ts` 会自动重新编译并同步给主题 worktree。
 
-## 图片（M3）
+## 图片
 
-图片不进 Git 仓库。M3 会提供：
-
-```powershell
-npm run media ./screenshot.png
-```
-
-脚本会转 WebP、按 SHA-256 命名、上传 Cloudflare R2，并输出可粘贴的 Markdown 链接。当前请使用外链，或先不插图。
+仓库不存二进制；图床尚未实现。当前请使用外链图片，不要把图片提交到 `content/` 或 `public/`。
 
 ## 时间显示
 
@@ -173,4 +166,4 @@ npm run media ./screenshot.png
 - 当前版本待锚定，上次锚定于 X；
 - 尚无任何锚定记录。
 
-已锚定的修订会显示 tx、合约与签名地址；页面还列出 Git blob SHA-1。访客可以按“链上事件 → GitHub commit/文件 → 比对 blob SHA-1”三步核验。私有仓库阶段 GitHub 链接对外 404，链上交易仍可查；公开后才完整。页面不再生成 `raw/` 与 `proof/`。
+已锚定的修订会显示 tx、合约与签名地址；页面还列出 Git blob SHA-1。核验方式与证明边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
