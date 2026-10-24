@@ -117,7 +117,7 @@ jobs:
       - name: Anchor pushed commit
         env:
           ANCHOR_PRIVATE_KEY: ${{ secrets.ANCHOR_PRIVATE_KEY }}
-          ANCHOR_RPC_URL: ${{ vars.ANCHOR_RPC_URL || 'https://base-rpc.publicnode.com' }}
+          ANCHOR_RPC_URL: ${{ secrets.ANCHOR_RPC_URL || vars.ANCHOR_RPC_URL || 'https://base-rpc.publicnode.com' }}
         run: |
           if npm run blog -- anchor \
             --commit "$GITHUB_SHA" \
