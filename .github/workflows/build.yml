@@ -124,6 +124,7 @@ jobs:
             --yes --json \
             --private-key-env ANCHOR_PRIVATE_KEY \
             --rpc-url "$ANCHOR_RPC_URL" \
+            --lookback-blocks 10 \
             --author-name "github-actions[bot]" \
             --author-email "41898282+github-actions[bot]@users.noreply.github.com"; then
             exit 0
@@ -133,6 +134,7 @@ jobs:
             --commit "$GITHUB_SHA" \
             --recover-only --json \
             --rpc-url "$ANCHOR_RPC_URL" \
+            --lookback-blocks 10 \
             --author-name "github-actions[bot]" \
             --author-email "41898282+github-actions[bot]@users.noreply.github.com"
 
