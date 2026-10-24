@@ -1,5 +1,7 @@
 ---
 import type { ContentNode, SiteMeta } from '../generated/contract';
+import { buildRevisionPayload } from '../lib/revisions';
+import { serializeJson } from '../lib/json';
 
 interface Props {
   node: ContentNode;
@@ -7,170 +9,133 @@ interface Props {
 }
 
 const { node, site } = Astro.props;
-const latest = node.revisions[0];
-const hasAnyAnchor = node.revisions.some((revision) => revision.verifiedAt !== null);
-const status = node.isVerified
-  ? '已锚定'
-  : hasAnyAnchor
-    ? '当前版本待锚定'
-    : '尚无链上锚定记录';
-
-const formatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: site.timezone,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-});
-
-const formatTime = (timestamp: number | null | undefined): string =>
-  timestamp ? formatter.format(new Date(timestamp * 1000)) : '—';
-
-const githubBase = `https://github.com/${site.repo}`;
-const apiBase = `https://api.github.com/repos/${site.repo}`;
-const commitUrl = (commit: string): string => `${githubBase}/commit/${commit}`;
-const blobUrl = (commit: string, filePath: string): string =>
-  `${githubBase}/blob/${commit}/${encodeURI(filePath)}`;
-const apiUrl = (commit: string, filePath: string): string =>
-  `${apiBase}/contents/${encodeURI(filePath)}?ref=${commit}`;
-const shortAddress = (address: string): string =>
-  `${address.slice(0, 8)}…${address.slice(-6)}`;
-
-const statusDetail = node.isVerified
-  ? `锚定于 ${formatTime(latest?.verifiedAt)}${
-      latest?.anchor ? ` · block #${latest.anchor.blockNumber}` : ''
-    }`
-  : hasAnyAnchor
-    ? `当前版本待锚定 · 上次锚定于 ${formatTime(node.updatedAt)}`
-    : '尚无锚定记录；时间来自 Git 提交。';
-
-const lineClass = (line: string): string => {
-  if (line.startsWith('+') && !line.startsWith('+++')) return 'diff-add';
-  if (line.startsWith('-') && !line.startsWith('---')) return 'diff-del';
-  return '';
-};
+const payload = buildRevisionPayload(node, site);
+const latest = payload.revisions[0];
+const latestAnchor = payload.revisions.find((revision) => revision.anchor);
+const json = serializeJson(payload);
 ---
 
-<details class="revisions">
-  <summary>
-    修订与存证 · {node.revisions.length} 次提交 · {status}
-  </summary>
+<details class="revisions" data-revisions>
+  <summary>{`修订与存证 · ${payload.revisions.length} 次提交 · ${payload.status}`}</summary>
+  <p class="revision-status">{payload.statusDetail}</p>
+  {payload.isDirty && <p class="revision-status">当前工作区有未提交修改。</p>}
 
-  <p class="revision-status">{statusDetail}</p>
-  {node.isDirty && <p class="revision-status">当前工作区有未提交修改。</p>}
-
-  <ol class="revision-list">
+  <div class="revision-fallback" data-revision-fallback>
     {
-      node.revisions.map((revision, index) => {
-        const anchor = revision.anchor;
-        const commit = revision.commit;
-        return (
-          <li>
-            <div class="revision-head">
-              <span class="revision-index">
-                {index === 0 ? '当前版本' : `第 ${node.revisions.length - index} 次修改`}
-              </span>
-              {commit ? (
-                <a
-                  class="revision-commit"
-                  href={commitUrl(commit)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <code>{revision.shortCommit}</code>
-                </a>
-              ) : (
-                <code>未提交</code>
-              )}
-              <time datetime={new Date(revision.gitTimestamp * 1000).toISOString()}>
-                {formatTime(revision.gitTimestamp)}
-              </time>
-            </div>
-
-            <p class="revision-message">{revision.message}</p>
-
-            {commit && revision.gitBlobSha1 && (
-              <p class="revision-blob">
-                blob SHA-1 <code>{revision.gitBlobSha1}</code>
-                {' · '}
-                <a
-                  href={apiUrl(commit, node.git.path)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  GitHub API ↗
-                </a>
-              </p>
-            )}
-
-            {anchor ? (
-              <p class="revision-anchor">
-                锚定于 {formatTime(revision.verifiedAt)}
-                {' · '}
-                <a href={anchor.explorerUrl} target="_blank" rel="noopener noreferrer">
-                  交易 {anchor.txHash.slice(0, 10)}… ↗
-                </a>
-                {' · '}
-                <a href={anchor.contractExplorerUrl} target="_blank" rel="noopener noreferrer">
-                  合约 {shortAddress(anchor.contract)} ↗
-                </a>
-                {' · '}
-                <a href={anchor.senderExplorerUrl} target="_blank" rel="noopener noreferrer">
-                  签名 {shortAddress(anchor.sender)} ↗
-                </a>
-              </p>
+      latest ? (
+        <>
+          <div class="revision-head">
+            <span class="revision-index">{latest.label}</span>
+            {latest.commitUrl ? (
+              <a
+                class="revision-commit"
+                href={latest.commitUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <code>{latest.shortCommit}</code>
+              </a>
             ) : (
-              <p class="revision-anchor">未锚定</p>
+              <code>未提交</code>
             )}
+            <time datetime={latest.dateTime}>{latest.timeLabel}</time>
+            <span class="revision-changes">
+              <span class="diff-add">+{latest.additions}</span>
+              <span class="diff-del">−{latest.deletions}</span>
+            </span>
+          </div>
 
-            {anchor && commit && (
-              <details class="revision-verify">
-                <summary>三步核验</summary>
-                <ol>
-                  <li>
-                    链上：打开<a href={anchor.explorerUrl} target="_blank" rel="noopener noreferrer">
-                      交易
-                    </a>，确认 <code>Anchored</code> 事件的 sender 与 commit。
-                  </li>
-                  <li>
-                    GitHub：打开
-                    <a href={commitUrl(commit)} target="_blank" rel="noopener noreferrer">
-                      commit {revision.shortCommit}
-                    </a>
-                    与
-                    <a href={blobUrl(commit, node.git.path)} target="_blank" rel="noopener noreferrer">
-                      这一版正文
-                    </a>
-                    ，确认内容一致。
-                  </li>
-                  <li>
-                    比对：<a href={apiUrl(commit, node.git.path)} target="_blank" rel="noopener noreferrer">
-                      GitHub API
-                    </a>
-                    返回的 <code>sha</code> 应与上面的 <code>{revision.gitBlobSha1}</code> 一致。
-                  </li>
-                </ol>
-              </details>
-            )}
+          <p class="revision-message">{latest.message}</p>
 
-            {revision.diff && (
-              <pre class="revision-diff">
-                <code>
-                  {revision.diff.split('\n').map((line) => (
-                    <span class={lineClass(line)}>
-                      {line}
-                      {'\n'}
-                    </span>
-                  ))}
-                </code>
-              </pre>
-            )}
-          </li>
-        );
-      })
+          {latest.blobSha1 && latest.apiUrl && (
+            <p class="revision-blob">
+              blob SHA-1 <code>{latest.blobSha1}</code>
+              <a
+                href={latest.apiUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                GitHub API ↗
+              </a>
+            </p>
+          )}
+
+          {latest.anchor ? (
+            <p class="revision-anchor">
+              <a href={latest.anchor.txUrl} target="_blank" rel="noopener noreferrer">
+                交易 {latest.anchor.txShort} ↗
+              </a>
+              <a
+                href={latest.anchor.contractUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                合约 {latest.anchor.contractShort} ↗
+              </a>
+              <a
+                href={latest.anchor.senderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                签名 {latest.anchor.senderShort} ↗
+              </a>
+            </p>
+          ) : latestAnchor?.anchor ? (
+            <p class="revision-anchor">
+              当前版本未锚定 · 最近锚定
+              <a href={latestAnchor.anchor.txUrl} target="_blank" rel="noopener noreferrer">
+                交易 {latestAnchor.anchor.txShort} ↗
+              </a>
+            </p>
+          ) : (
+            <p class="revision-anchor">未锚定</p>
+          )}
+
+          {latest.anchor && latest.commitUrl && latest.blobUrl && latest.apiUrl && (
+            <details class="revision-verify">
+              <summary>三步核验</summary>
+              <ol>
+                <li>
+                  链上：打开<a
+                    href={latest.anchor.txUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >交易</a>，确认 <code>Anchored</code> 事件的 sender 与 commit。
+                </li>
+                <li>
+                  GitHub：打开<a
+                    href={latest.commitUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >commit {latest.shortCommit}</a>与<a
+                    href={latest.blobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >这一版正文</a>，确认内容一致。
+                </li>
+                <li>
+                  比对：<a
+                    href={latest.apiUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >GitHub API</a>返回的 <code>sha</code> 应与上面的 <code>{latest.blobSha1}</code> 一致。
+                </li>
+              </ol>
+            </details>
+          )}
+        </>
+      ) : (
+        <p class="revision-status">尚无提交记录。</p>
+      )
     }
-  </ol>
+  </div>
+
+  <noscript>
+    <p class="revision-noscript">
+      完整修订历史需要启用 JavaScript；当前版本的存证链接仍可核验。
+    </p>
+  </noscript>
+
+  <div data-revision-log hidden></div>
+  <script type="application/json" data-revision-data set:html={json}></script>
 </details>

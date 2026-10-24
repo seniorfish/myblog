@@ -2,8 +2,8 @@
   "id": "default",
   "displayName": "Default Minimal",
   "model": "Human (long-term maintained)",
-  "description": "暖白纸张、单栏、等宽日期的极简默认主题。",
+  "description": "暖白纸张、系统衬线正文、等宽日期的极简默认主题。",
   "author": "seniorfish",
   "isDefault": true,
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

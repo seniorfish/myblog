@@ -5,6 +5,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import ChildrenList from '../../components/ChildrenList.astro';
 import NodeMeta from '../../components/NodeMeta.astro';
 import Revisions from '../../components/Revisions.astro';
+import TableOfContents from '../../components/TableOfContents.astro';
 
 interface Props {
   node: ContentNode;
@@ -24,42 +25,78 @@ const data = siteDataJson as SiteData;
 const { node } = Astro.props;
 const pageTitle = node.title ?? node.displayTitle;
 const description = node.description ?? node.excerpt;
+const tags = [node.primaryTag, ...node.secondaryTags];
+const publishedTime = new Date((node.createdAt ?? node.displayTime) * 1000).toISOString();
+const modifiedTime = new Date((node.updatedAt ?? node.displayTime) * 1000).toISOString();
+const canonicalUrl = new URL(node.url, data.site.url).toString();
+
+const jsonLd = {
+  '@type': 'BlogPosting',
+  headline: pageTitle,
+  description: description ?? '',
+  url: canonicalUrl,
+  mainEntityOfPage: canonicalUrl,
+  datePublished: publishedTime,
+  dateModified: modifiedTime,
+  articleSection: node.primaryTag,
+  keywords: tags.join(', '),
+  author: { '@type': 'Person', name: data.site.author },
+  publisher: { '@type': 'Person', name: data.site.author },
+  inLanguage: data.site.lang,
+  isPartOf: { '@type': 'WebSite', name: data.site.title, url: data.site.url },
+};
 ---
 
-<BaseLayout site={data.site} title={pageTitle} description={description} canonicalPath={node.url}>
-  <article class="node-detail" data-type={node.primaryTag} data-tags={node.rawTags}>
-    <nav class="back"><a href="/">← 返回时间流</a></nav>
+<BaseLayout
+  site={data.site}
+  title={pageTitle}
+  description={description}
+  canonicalPath={node.url}
+  ogType="article"
+  publishedTime={publishedTime}
+  modifiedTime={modifiedTime}
+  tags={tags}
+  jsonLd={jsonLd}
+>
+  <div class="article-layout">
+    <article class="node-detail" data-type={node.primaryTag} data-tags={node.rawTags}>
+      <nav class="back" aria-label="返回导航"><a href="/archive">← 返回索引</a></nav>
 
-    {
-      node.parent && (
-        <aside class="context-card">
-          <span class="context-label">前情提要</span>
-          <a href={node.parent.url}>
-            [{node.parent.primaryTag}] {node.parent.displayTitle}
-          </a>
-        </aside>
-      )
-    }
+      {
+        node.parent && (
+          <aside class="context-card">
+            <span class="context-label">前情提要</span>
+            <a href={node.parent.url}>
+              [{node.parent.primaryTag}] {node.parent.displayTitle}
+            </a>
+          </aside>
+        )
+      }
 
-    <header>
-      {node.title ? <h1>{node.title}</h1> : <h1 class="sr-only">{node.displayTitle}</h1>}
-      <NodeMeta node={node} />
-    </header>
+      <header>
+        {node.title ? <h1>{node.title}</h1> : <h1 class="sr-only">{node.displayTitle}</h1>}
+        <NodeMeta node={node} />
+      </header>
 
-    {
-      node.externalUrl && (
-        <p class="external-link">
-          <a href={node.externalUrl} target="_blank" rel="noopener noreferrer">
-            {node.externalUrl} ↗
-          </a>
-        </p>
-      )
-    }
+      <TableOfContents headings={node.headings} variant="mobile" />
 
-    {node.html && <div class="prose" set:html={node.html} />}
+      {
+        node.externalUrl && (
+          <p class="external-link">
+            <a href={node.externalUrl} target="_blank" rel="noopener noreferrer">
+              {node.externalUrl} ↗
+            </a>
+          </p>
+        )
+      }
 
-    {node.children.length > 0 && <ChildrenList node={node} />}
+      {node.html && <div class="prose" set:html={node.html} />}
 
-    <Revisions node={node} site={data.site} />
-  </article>
+      {node.children.length > 0 && <ChildrenList node={node} />}
+
+      <Revisions node={node} site={data.site} />
+    </article>
+
+    <TableOfContents headings={node.headings} variant="rail" />
+  </div>
 </BaseLayout>

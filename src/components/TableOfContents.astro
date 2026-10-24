@@ -1,0 +1,47 @@
+---
+import type { ContentNode } from '../generated/contract';
+
+interface Props {
+  headings: ContentNode['headings'];
+  variant: 'rail' | 'mobile';
+}
+
+const { headings, variant } = Astro.props;
+const items = headings.filter(
+  (heading) => (heading.depth === 2 || heading.depth === 3) && heading.slug,
+);
+---
+
+{
+  items.length >= 2 && variant === 'rail' && (
+    <nav class="toc-rail" aria-label="文章目录">
+      <div class="toc-sticky">
+        <p class="toc-label">目录</p>
+        <ol class="toc-list">
+          {items.map((heading) => (
+            <li class={`toc-item toc-depth-${heading.depth}`}>
+              <a href={`#${heading.slug}`}>{heading.text}</a>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </nav>
+  )
+}
+
+{
+  items.length >= 2 && variant === 'mobile' && (
+    <details class="toc-mobile">
+      <summary>目录</summary>
+      <nav aria-label="文章目录">
+        <ol class="toc-list">
+          {items.map((heading) => (
+            <li class={`toc-item toc-depth-${heading.depth}`}>
+              <a href={`#${heading.slug}`}>{heading.text}</a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    </details>
+  )
+}

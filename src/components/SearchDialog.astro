@@ -1,0 +1,25 @@
+<dialog
+  id="site-search"
+  class="search-dialog"
+  aria-labelledby="search-title"
+  data-search-dialog
+>
+  <div class="search-head">
+    <h2 id="search-title" class="search-title">站内搜索</h2>
+    <button class="search-close" type="button" data-search-close aria-label="关闭搜索">关闭</button>
+  </div>
+
+  <label class="sr-only" for="search-input">搜索文章</label>
+  <input
+    id="search-input"
+    class="search-input"
+    type="search"
+    autocomplete="off"
+    placeholder="输入关键词…"
+    data-search-input
+  />
+  <p class="search-status" role="status" aria-live="polite" data-search-status>
+    输入关键词开始搜索
+  </p>
+  <ul class="search-results" data-search-results></ul>
+</dialog>

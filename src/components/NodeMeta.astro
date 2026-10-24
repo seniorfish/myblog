@@ -12,7 +12,7 @@ const { node } = Astro.props;
   <time datetime={node.displayDate.iso}>{node.displayDate.iso}</time>
   <span class="node-tag">{node.primaryTag}</span>
   {node.secondaryTags.map((tag) => <span class="node-tag">#{tag}</span>)}
-  <span>{node.readingTime} min</span>
+  <span>{node.readingTime} 分钟</span>
   {node.isDirty && <span class="node-badge">有未提交修改</span>}
   {node.isUntracked && <span class="node-badge">文件未提交</span>}
 </div>

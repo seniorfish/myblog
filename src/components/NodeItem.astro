@@ -84,9 +84,8 @@ const externalHost = (() => {
       <div class="node-meta">
         <span class="node-tag">{node.primaryTag}</span>
         {node.secondaryTags.map((tag) => <span class="node-tag">#{tag}</span>)}
-        <span>{node.readingTime} min</span>
+        <span>{node.readingTime} 分钟</span>
         {externalHost && <span class="node-tag">{externalHost}</span>}
-        <a class="node-permalink" href={node.url}>详情</a>
       </div>
     </div>
   </div>

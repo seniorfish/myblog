@@ -31,7 +31,7 @@ const tags = [...counts.entries()]
   {
     home ? (
       <article class="node-detail">
-        {home.title && <h1 class="page-title">{home.title}</h1>}
+        <h1 class="page-title">{home.title ?? home.displayTitle}</h1>
         <div class="prose" set:html={home.html} />
         <p class="back">
           <a href="/archive">查看全部内容 →</a>

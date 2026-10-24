@@ -1,6 +1,6 @@
 # theme/default
 
-Default Minimal：暖白纸张、单栏、等宽日期。
+Default Minimal：暖白纸张、系统衬线正文、单栏、等宽日期。
 
 本分支是孤儿分支，只包含主题 UI。完整规则见 main：
 

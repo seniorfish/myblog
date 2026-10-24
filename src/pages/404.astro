@@ -7,7 +7,7 @@ const data = siteDataJson as SiteData;
 ---
 
 <BaseLayout site={data.site} title="404" canonicalPath="/404">
-  <h1>这个节点不存在。</h1>
+  <h1 class="page-title">这个节点不存在。</h1>
   <p class="intro">URL 可能已经改变，或者这条内容从未存在。</p>
-  <p><a href="/">← 返回时间流</a></p>
+  <nav class="back" aria-label="返回首页"><a href="/">← 返回首页</a></nav>
 </BaseLayout>

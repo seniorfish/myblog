@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import SearchDialog from '../components/SearchDialog.astro';
+import { serializeJson } from '../lib/json';
 import type { SiteMeta } from '../generated/contract';
 
 interface Props {
@@ -7,28 +9,75 @@ interface Props {
   title?: string;
   description?: string;
   canonicalPath?: string;
+  ogType?: 'website' | 'article';
+  publishedTime?: string;
+  modifiedTime?: string;
+  tags?: string[];
+  jsonLd?: Record<string, unknown>;
 }
 
-const { site, title, description, canonicalPath = '/' } = Astro.props;
+const {
+  site,
+  title,
+  description,
+  canonicalPath = '/',
+  ogType = 'website',
+  publishedTime,
+  modifiedTime,
+  tags = [],
+  jsonLd,
+} = Astro.props;
+
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
 const pageDescription = description ?? site.description;
 const canonical = new URL(canonicalPath, site.url).toString();
-const themeModel = __THEME_MODEL__;
-const themeHash = __THEME_GIT_HASH__;
-const contentHash = __CONTENT_GIT_HASH__;
+const locale = site.lang.replace('-', '_');
 const year = new Date().getFullYear();
+const githubUrl = `https://github.com/${site.repo}`;
+
+const websiteNode = {
+  '@type': 'WebSite',
+  name: site.title,
+  url: site.url,
+  description: site.description,
+  inLanguage: site.lang,
+  author: { '@type': 'Person', name: site.author },
+};
+const structuredData = jsonLd
+  ? { '@context': 'https://schema.org', '@graph': [websiteNode, jsonLd] }
+  : { '@context': 'https://schema.org', ...websiteNode };
 ---
 
 <!doctype html>
-<html lang={site.lang} data-theme-id={__THEME_ID__}>
+<html lang={site.lang} data-theme-id={__THEME_ID__} data-timezone={site.timezone}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={pageDescription} />
+    <meta name="author" content={site.author} />
     <link rel="canonical" href={canonical} />
     <link rel="alternate" type="application/rss+xml" title={site.title} href="/rss.xml" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content={site.title} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={locale} />
+    {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+    {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+    {tags.map((tag) => <meta property="article:tag" content={tag} />)}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={pageDescription} />
+
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0c" />
+
+    <script type="application/ld+json" set:html={serializeJson(structuredData)} />
+
     <script is:inline>
       (() => {
         try {
@@ -47,10 +96,46 @@ const year = new Date().getFullYear();
         <a class="site-title" href="/">{site.title}</a>
         <p class="site-description">{site.description}</p>
         <div class="site-actions">
-          <a class="rss-link" href="/archive">索引</a>
-          <a class="rss-link" href="/rss.xml">RSS</a>
+          <a class="action-link" href="/archive">索引</a>
+          <a class="action-link" href="/rss.xml">RSS</a>
+          <button
+            class="action-link"
+            type="button"
+            data-search-open
+            aria-haspopup="dialog"
+            aria-controls="site-search"
+            hidden
+          >
+            搜索
+          </button>
           <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换明暗模式">
-            ◐
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"></path>
+            </svg>
           </button>
         </div>
       </header>
@@ -60,40 +145,23 @@ const year = new Date().getFullYear();
       </main>
 
       <footer class="site-footer">
-        <span>© {year} {site.author}</span>
-        <span class="footer-meta">
-          UI: {themeModel || 'default'} · {themeHash} · content {contentHash}
-        </span>
+        <p class="footer-copy">© {year} {site.author}</p>
+        <nav class="footer-links" aria-label="站点链接">
+          <a href="/archive">索引</a>
+          <span aria-hidden="true">·</span>
+          <a href="/rss.xml">RSS</a>
+          <span aria-hidden="true">·</span>
+          <a href={githubUrl} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+        <a class="footer-top" href="#" data-back-to-top>
+          回到顶部 <span aria-hidden="true">↑</span>
+        </a>
       </footer>
     </div>
 
-    <script is:inline>
-      (() => {
-        const button = document.querySelector('[data-theme-toggle]');
-        if (!button) return;
-
-        const root = document.documentElement;
-        const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const isDark = () =>
-          root.dataset.theme ? root.dataset.theme === 'dark' : prefersDark();
-
-        const sync = () => {
-          const dark = isDark();
-          button.textContent = dark ? '☀' : '◐';
-          button.setAttribute('aria-label', dark ? '切换到亮色模式' : '切换到暗色模式');
-        };
-
-        button.addEventListener('click', () => {
-          const next = isDark() ? 'light' : 'dark';
-          root.dataset.theme = next;
-          try {
-            localStorage.setItem('theme', next);
-          } catch {}
-          sync();
-        });
-
-        sync();
-      })();
+    <SearchDialog />
+    <script>
+      import '../scripts/enhance';
     </script>
   </body>
 </html>
