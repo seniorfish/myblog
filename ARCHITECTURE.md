@@ -200,13 +200,14 @@ draft: false          # 可选
 
 - `npm run serve`：`scripts/serve.ts` 静态服务器（clean URL、SW 头、`_headers` 等价缓存头）。
 - `npm run test:e2e`：`playwright-core` + 本机 Chrome，验证“默认主题 → SW 接管 → 切 Terminal → URL 不变 → 断网导航”。
-- CI：`.github/workflows/build.yml` 在 main / theme 分支 push、手动触发或每日兜底时构建；`content/` 变化时先由 anchor job 锚定，再由无密钥的 build job 构建并上传 `dist` artifact。`theme/*` push 现在会触发 workflow（checkout main 再 fetch 主题分支）。
+- CI：`.github/workflows/build.yml` 在 main / theme 分支 push、手动触发或每日兜底时构建；`content/` 变化时先由 anchor job 锚定，再由无密钥的 build job 构建并上传 `dist` artifact。`theme/*` push 现在会触发 workflow（checkout main 再 fetch 主题分支）。build 成功后，独立的 deploy job 下载 artifact 并直传 Cloudflare Pages；只有 deploy job 读 `CLOUDFLARE_API_TOKEN`。
 
 ## 7. M3：媒体与部署
 
 - 图片由 `scripts/upload-media.ts` 转 WebP/AVIF，按内容 SHA-256 命名，上传 Cloudflare R2（S3 兼容 API）。
 - 仓库只出现 `https://cdn.<domain>/<sha256>.webp`。
-- Cloudflare Pages 用 `wrangler pages deploy dist`；`_headers` 让 `manifest.json`/`sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 长缓存。
+- Cloudflare Pages 项目 `chenbase-blog`，生产域名 `https://chenbase.cc`（`www.chenbase.cc` 同一项目）。DNS 仍在阿里云：根域名与 `www` 都是 CNAME 到 `chenbase-blog.pages.dev`，Cloudflare 已完成验证并签发证书。
+- 部署用 `wrangler pages deploy dist`；`_headers` 让 `manifest.json`/`sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 长缓存。
 - 生产前先用测试提交跑通“锚定 → anchors 分支 → 构建 → 页面三步核验”，再锚定正式文章；合约已在 Base 主网部署。
 
 ## 8. 已知边界
