@@ -411,6 +411,7 @@ function initSearch(): void {
   });
 
   input.addEventListener('keydown', (event) => {
+    if (event.isComposing) return;
     if (event.key !== 'ArrowDown') return;
     const first = results.querySelector<HTMLAnchorElement>('a');
     if (!first) return;
@@ -419,6 +420,7 @@ function initSearch(): void {
   });
 
   results.addEventListener('keydown', (event) => {
+    if (event.isComposing) return;
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Escape') return;
     if (event.key === 'Escape') {
       close();
