@@ -213,6 +213,9 @@ jobs:
 
   deploy:
     needs: [build]
+    # The build job tolerates a skipped anchor job, so the default success()
+    # check would skip deploy as well; check build explicitly instead.
+    if: always() && !cancelled() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
