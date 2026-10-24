@@ -12,5 +12,3 @@
 - GitHub: [github.com/seniorfish](https://github.com/seniorfish)
 - RSS: [订阅](/rss.xml)
 - 全部内容: [索引](/archive)
-
-这一页来自 `content/home.md`。主 Tag 是 `首页`，所以它渲染在 `/`，并从索引、RSS 与搜索中排除。
