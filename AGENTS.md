@@ -1,50 +1,25 @@
 # theme/default
 
-## 你只能修改
+Default Minimal：暖白纸张、单栏、等宽日期。
 
-- `src/**`
-- `public/**`
-- `theme.contract.json`
-- `theme.package.json`（可选，用于追加依赖；必须写死版本）
+本分支是孤儿分支，只包含主题 UI。完整规则见 main：
 
-## 不要修改
-
-- `src/generated/**`：编译器生成的 `site-data.json` 与 `contract.ts`
-- `package.json`、`astro.config.mjs`、`tsconfig.json`、`src/env.d.ts`：由 main 的 `theme-harness` 注入
-- `core/`：在 main 分支，不属于主题
-
-## 数据契约
-
-先读 `src/generated/contract.ts`。页面从 `src/generated/site-data.json` 读取 `SiteData`。
-
-关键字段：
-
-- `site.buildId`、`site.url`、`site.ui.contentDisplay`
-- `node.id`、`node.url`、`node.primaryTag`、`node.rawTags`
-- `node.html`：已经渲染好的 Markdown，用 `<Fragment set:html={node.html} />` 注入
-- `node.displayTitle`、`node.excerpt`、`node.displayDate`
-- `node.parent`、`node.ancestors`、`node.children`
-- `node.revisions`、`node.isVerified`、`node.isDirty`、`node.isUntracked`
+- [AGENTS.md](https://github.com/seniorfish/myblog/blob/main/AGENTS.md)
+- [ARCHITECTURE.md](https://github.com/seniorfish/myblog/blob/main/ARCHITECTURE.md)
+- [THEME_AGENT_PROMPT.md](https://github.com/seniorfish/myblog/blob/main/THEME_AGENT_PROMPT.md)
+- 本地数据契约：`src/generated/contract.ts`
 
 ## 路由
 
-- `/` 首页：渲染 `SiteData.homeNodeId` 对应节点的 HTML（自我介绍）；没有首页节点时回退时间流。
-- `/archive` 文章索引：过滤掉首页节点后按时间混排。
-- `/n/{id}` 节点详情：`getStaticPaths` 必须过滤掉 `homeNodeId`。
-- `/404`
+- `/`：渲染 `SiteData.homeNodeId` 对应节点；没有首页节点时回退时间流。
+- `/archive`：文章索引，过滤首页节点后按时间混排。
+- `/n/{id}`：节点详情；`getStaticPaths` 必须过滤 `homeNodeId`。
+- `/404`。
 
 ## 命令
 
-在 worktree 根目录运行：
+在 worktree 根目录运行 `npm run dev`、`npm run build`、`npm run preview`。
 
-```bash
-npm run dev
-npm run build
-npm run preview
-```
+## 边界
 
-提交前确认 `git status` 只显示 UI 源文件，不包含 harness 生成物。
-
-## 语言
-
-代码注释、变量名用英文；文档和 UI 文案用中文。
+只提交 `src/`、`public/`、`theme.contract.json`、`theme.package.json`、`AGENTS.md`；不要提交 harness 注入物或 `src/generated/`。修改范围与完成条件以 `THEME_AGENT_PROMPT.md` 为准。
