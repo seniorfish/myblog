@@ -93,7 +93,7 @@ draft: false          # 可选
 
 ### 链上锚定（M3）
 
-- 链：Base 主网（chainId 8453）；合约 `0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4`。
+- 链：Base 主网（chainId 8453）；合约 `0x00000000009DE13419D7CFf80F6D2e1e992146aA`（deploy block 53014502），站点 sender 为 `0x000000000007C44d92De38e7CdBA161fE9CfBC4e`。
 - 合约只发事件，不存状态、没有 owner、不可升级：
   `Anchored(address indexed sender, bytes32 indexed commit)`。
 - 以 commit 为粒度；Git SHA-1 是 20 字节，右补零到 `bytes32`。

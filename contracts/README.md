@@ -2,7 +2,7 @@
 
 Base 主网的事件存证合约。它只做一件事：把 `(sender, commit)` 写进事件日志，不存状态、没有 owner、不可升级。
 
-## 已部署
+## 测试阶段部署（已弃用）
 
 | 项 | 值 |
 |---|---|
@@ -12,7 +12,7 @@ Base 主网的事件存证合约。它只做一件事：把 `(sender, commit)` �
 | 部署 tx | `0x4a49fe95d7941122c51286a7f23b2f11a86165748e4e165846df2c373014baba` |
 | 浏览器 | https://basescan.org/address/0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4 |
 
-完整记录见 `deployments/base-mainnet.json`。
+完整记录见 `deployments/base-mainnet.json`。生产站点使用下方 10 零合约；这张表仅保留测试阶段的部署记录。
 
 ### 10 零靓号合约（CREATE2）
 
@@ -26,7 +26,7 @@ Base 主网的事件存证合约。它只做一件事：把 `(sender, commit)` �
 | 区块 | 53014502 |
 | 浏览器 | https://basescan.org/address/0x00000000009de13419d7cff80f6d2e1e992146aa |
 
-完整记录见 `deployments/base-mainnet-vanity.json`。站点目前仍指向旧合约 `0x210B…fFe4`；文章定稿后切到新合约 + 靓号 sender。
+完整记录见 `deployments/base-mainnet-vanity.json`。站点已指向这个合约与靓号 sender（`site.config.ts`）。
 
 这个 CREATE2 代理的 fallback 期望**原始 calldata** `salt ++ initCode`，不是 ABI 的 `deploy(bytes32,bytes)`。正确写法：
 
@@ -52,8 +52,8 @@ event Anchored(address indexed sender, bytes32 indexed commit);
 枚举全部锚定：
 
 ```bash
-cast logs --address 0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4 \
-  --from-block 52996129 \
+cast logs --address 0x00000000009DE13419D7CFf80F6D2e1e992146aA \
+  --from-block 53014502 \
   --rpc-url https://mainnet.base.org
 ```
 

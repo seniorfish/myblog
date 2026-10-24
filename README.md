@@ -215,7 +215,7 @@ dist/             最终部署产物（gitignore）
 
 ## 链上存证
 
-- 合约：Base 主网 `0x210B7AeF6411eceeC16485Ad24f2762562FbfFe4`，只发 `Anchored(address indexed sender, bytes32 indexed commit)` 事件。
+- 合约：Base 主网 `0x00000000009DE13419D7CFf80F6D2e1e992146aA`（deploy block 53014502），只发 `Anchored(address indexed sender, bytes32 indexed commit)` 事件。
 - 索引：`anchors` 孤儿分支的 `anchors.ndjson`；构建离线读取，页面显示 tx / 合约 / 签名地址 / Git blob SHA-1。
 - CI 在 `content/` 推送时自动锚定；只有 anchor job 读 Environment secret `ANCHOR_PRIVATE_KEY`。
 - 本地：`--dry-run` 只预检；`--recover-only` 从链上事件回填索引；`--yes` 才发交易。
