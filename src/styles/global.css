@@ -492,6 +492,13 @@ button {
   font-size: inherit;
 }
 
+/* Keep long display math inside the prose column without page-level scrolling. */
+.prose mjx-container[jax="SVG"][display="true"] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .prose table {
   font-size: 0.9rem;
 }
