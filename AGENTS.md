@@ -22,4 +22,4 @@ Terminal：深色等宽终端风。
 
 ## 边界
 
-只提交 `src/`、`public/`、`theme.contract.json`、`theme.package.json`、`AGENTS.md`；不要提交 harness 注入物或 `src/generated/`。修改范围与完成条件以 `THEME_AGENT_PROMPT.md` 为准。
+只提交 `src/`、`public/`、`theme.contract.json`、`theme.package.json`、`AGENTS.md`；`LICENSE`（MIT）只随仓库存在，不要修改。不要提交 harness 注入物或 `src/generated/`。修改范围与完成条件以 `THEME_AGENT_PROMPT.md` 为准。
