@@ -94,3 +94,8 @@ tests/            Vitest
 
 - 代码注释、变量名、提交信息用英文；文档与站点 UI 文案用中文。
 - 私钥、助记词与 keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。详见 [AGENTS.md](AGENTS.md)。
+
+## 许可证
+
+- 代码（除 `content/` 外的本仓库内容，包括编译器、主题、脚本与合约）：[MIT](LICENSE)
+- 文章与文字内容（`content/`）：[CC BY-NC-SA 4.0](LICENSE-CONTENT)

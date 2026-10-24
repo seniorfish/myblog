@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "A verifiable, AI-themeable personal blog.",
+  "license": "MIT",
   "engines": {
     "node": ">=22.22.0"
   },

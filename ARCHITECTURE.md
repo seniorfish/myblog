@@ -92,7 +92,7 @@ SiteData ──► build/generated/
 
 ## 5. 主题模型
 
-- `theme/<id>` 是孤儿分支，只存 `src/`、`public/`、`theme.contract.json`、可选的 `theme.package.json` 与 `AGENTS.md`。
+- `theme/<id>` 是孤儿分支，只存 `src/`、`public/`、`theme.contract.json`、可选的 `theme.package.json`、`AGENTS.md` 与 `LICENSE`。
 - `theme-harness/` 在 main 上，提供 Astro 7 + Tailwind 4 的固定工具链与 Vite define 宏。
 - `scripts/prepare-theme.ts` 把 harness、`core/contract.ts`、`build/generated/site-data.json` 注入 worktree；这些文件被主题分支的 `.gitignore` 忽略。
 - 主题只消费 `SiteData`，不直接读 `content/`，也不解析 Markdown。正文 HTML 已由编译器渲染好，用 `<Fragment set:html={node.html} />` 注入。

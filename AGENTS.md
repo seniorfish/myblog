@@ -25,7 +25,7 @@
 - `content/`：只写正文与元数据；结构规则以 `CONTENT.md` 为准。
 - `core/`：编译器与契约；改完跑单元测试与完整构建。
 - `scripts/blog/`：唯一允许做 Git 写操作的地方；`scripts/ai/` 不得调用 Git。
-- `theme/<id>` 分支：只改 `src/`、`public/`、`theme.contract.json`、可选 `theme.package.json` 与 `AGENTS.md`。
+- `theme/<id>` 分支：只改 `src/`、`public/`、`theme.contract.json`、可选 `theme.package.json` 与 `AGENTS.md`；`LICENSE` 不要改。
 
 ## 验证
 
