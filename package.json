@@ -24,7 +24,8 @@
     "typecheck": "tsc --noEmit && tsc -p sw/tsconfig.json --noEmit",
     "migrate:meta": "tsx scripts/migrate-meta.ts",
     "contract:build": "forge build --root contracts",
-    "contract:test": "forge test --root contracts -vvv"
+    "contract:test": "forge test --root contracts -vvv",
+    "deploy:pages": "wrangler pages deploy dist --project-name=chenbase-blog --branch=main --commit-dirty=true"
   },
   "dependencies": {
     "@shikijs/rehype": "4.5.0",
@@ -59,6 +60,7 @@
     "playwright-core": "^1.64.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
+    "wrangler": "4.145.0",
     "vitest": "5.0.5"
   }
 }

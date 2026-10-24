@@ -4,7 +4,7 @@ const config = {
   title: 'seniorfish 的博客',
   description: '个人数字史记',
   author: 'seniorfish',
-  url: 'https://blog.example.com',
+  url: 'https://chenbase.cc',
   lang: 'zh-CN',
   timezone: 'Asia/Shanghai',
   repo: 'seniorfish/myblog',

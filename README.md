@@ -7,7 +7,8 @@
 - M1：内容编译器、默认主题、本地开发与静态构建。
 - M2：多主题构建、VFS、`manifest.json`、Service Worker 主题切换、离线访问、宿主主题 dock、本地预览服务器与真实浏览器端到端测试。
 - 写作工具：`npm run blog`（仓库/Git 状态机）与 `npm run ai`（单文件元数据 / 语言优化）。
-- M3 链上存证：Base 主网事件合约 + `anchors` 分支索引 + CI 自动锚定（已完成）；R2 图床与 Cloudflare Pages 部署待做。
+- M3 链上存证：Base 主网事件合约 + `anchors` 分支索引 + CI 自动锚定（已完成）。
+- 部署：Cloudflare Pages 项目 `chenbase-blog`，生产域名 <https://chenbase.cc>（`www` 同样可用）；R2 图床待做。
 
 ## 快速开始
 
@@ -110,6 +111,7 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 | `npm test` | Vitest 单元/集成测试 |
 | `npm run typecheck` | 主程序 + Service Worker 类型检查 |
 | `npm run build:runtime` | 单独构建 `host/sys.ts` 与 `sw/sw.ts` |
+| `npm run deploy:pages` | 把 `dist/` 直传到 Cloudflare Pages（需 `CLOUDFLARE_API_TOKEN`） |
 
 ## 首页与索引
 
@@ -145,6 +147,16 @@ npm run test:e2e    # 无头 Chrome：SW 接管 → 切主题 → URL 不变 →
 - 极端情况下（浏览器或代理缓存异常）仍可在 DevTools 里 Update/Unregister，但这只是排障手段，不是正常访客流程。
 
 CI 每次部署都会改变 `SW_BUILD_ID`（commit SHA），因此 `sw.js` 字节会变；即使内容 release 没变，新 worker 也会被浏览器发现并接管。
+
+## 部署（Cloudflare Pages）
+
+生产站点：<https://chenbase.cc>（Cloudflare Pages 项目 `chenbase-blog`，`www.chenbase.cc` 指向同一项目）。
+
+- CI：`build` 产出 `dist`，`deploy` job 用 `cloudflare/wrangler-action` 直传；只有 deploy job 读 `CLOUDFLARE_API_TOKEN`，`build` 保持无密钥。
+- 需要的仓库 secret：`CLOUDFLARE_API_TOKEN`（仅 `Pages:Edit`）与 `CLOUDFLARE_ACCOUNT_ID`。
+- 本地手动发布：`npm run deploy:pages`（同样从环境变量读 token）。
+- 缓存策略来自 `dist/_headers`：`manifest.json` / `sw.js` 不缓存，`/_themes/*` 与 `/_astro/*` 一年 immutable。
+- DNS 在阿里云（`chenbase.cc` 不是 Cloudflare zone），因此根域名用 **CNAME `@` → `chenbase-blog.pages.dev`**；Cloudflare 已验证并签发证书。`www` 同法。改动 DNS 前先确认没有其他 `@` 记录。
 
 ## 主题博物馆
 

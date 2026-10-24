@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-M1 + M2 已完成：内容编译器、默认主题、多主题构建、VFS、manifest、Service Worker 主题切换/离线、宿主 dock、本地 serve 与浏览器 e2e。写作工具已拆成 `npm run blog`（仓库/Git）与 `npm run ai`（单文件 AI）。M3 链上存证已接入 Base 主网（事件合约 + `anchors` 分支 + CI 自动锚定）；R2 图床与 Cloudflare Pages 部署待做。
+M1 + M2 已完成：内容编译器、默认主题、多主题构建、VFS、manifest、Service Worker 主题切换/离线、宿主 dock、本地 serve 与浏览器 e2e。写作工具已拆成 `npm run blog`（仓库/Git）与 `npm run ai`（单文件 AI）。M3 链上存证已接入 Base 主网（事件合约 + `anchors` 分支 + CI 自动锚定）；Cloudflare Pages 已上线（`chenbase-blog` / https://chenbase.cc），R2 图床待做。
 
 ## 语言
 

@@ -210,3 +210,29 @@ jobs:
           name: blog-dist
           path: dist
           retention-days: 7
+
+  deploy:
+    needs: [build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: blog-deploy
+      cancel-in-progress: true
+    timeout-minutes: 10
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: blog-dist
+          path: dist
+
+      # The deploy job is the only one that reads the Pages token; build stays
+      # secret-free. Keep the token scoped to Pages:Edit.
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=chenbase-blog --branch=main --commit-dirty=true
