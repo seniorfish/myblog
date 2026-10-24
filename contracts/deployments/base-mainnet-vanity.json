@@ -1,0 +1,20 @@
+{
+  "chain": "base-mainnet",
+  "chainId": 8453,
+  "contract": "0x00000000009de13419d7cff80f6d2e1e992146aa",
+  "create2Proxy": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "salt": "0x00000047158ddb110bb97f000000000000000000000000000000000000000000",
+  "initCodeHash": "0x9258486ccc7a8adc7be83aacae9de7602e53ffd30c53c2c99b802aaca72972cd",
+  "caller": "0x000000000007C44d92De38e7CdBA161fE9CfBC4e",
+  "tx": "0xf2495a463c50ae1434afd600f988ba0578c8464369715cc74866c6da7f981c9d",
+  "block": 53014502,
+  "blockTimestamp": 1792818351,
+  "gasUsed": 114200,
+  "compiler": "solc 0.8.37",
+  "source": "contracts/src/IcebergAnchor.sol",
+  "constructorArgs": [],
+  "event": "Anchored(address indexed sender, bytes32 indexed commit)",
+  "topic0": "0xee1610244dfc4b116b1433dd4459fd7b1d3d2bf737a05fc3f6d8f173005d7147",
+  "explorerUrl": "https://basescan.org/address/0x00000000009de13419d7cff80f6d2e1e992146aa",
+  "notes": "The CREATE2 proxy expects raw calldata salt ++ initCode. An earlier ABI-encoded deploy(bytes32,bytes) call (tx 0xdea3be8b6ab94501e06b57dc1924acb17d149b67b27f7e5214934155207fd2de) did not create this address."
+}
