@@ -1,10 +1,12 @@
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeMathjaxSvg from 'rehype-mathjax/svg';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import rehypeStringify from 'rehype-stringify';
 import rehypeShiki from '@shikijs/rehype';
 import { remarkAlert } from 'remark-github-blockquote-alert';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
@@ -93,8 +95,10 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkAlert)
+  .use(remarkMath)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
+  .use(rehypeMathjaxSvg)
   .use(normalizeCodeLanguages)
   .use(rehypeSlug)
   .use(rehypeAutolinkHeadings, { behavior: 'wrap' })
@@ -111,6 +115,15 @@ export async function renderMarkdown(body: string): Promise<RenderedMarkdown> {
   const mdast = processor.parse(body) as MdastRoot;
   const hast = (await processor.run(mdast)) as HastRoot;
   const html = processor.stringify(hast);
+
+  // MathJax injects its stylesheet into the tree. Keep it in the HTML, but do
+  // not let it leak into plain text, reading time, or the search index.
+  visit(hast, 'element', (node: Element, index, parent) => {
+    if (node.tagName !== 'style' && node.tagName !== 'script') return;
+    if (!parent || index === undefined) return;
+    parent.children.splice(index, 1);
+    return index;
+  });
 
   const headings: Heading[] = [];
   visit(hast, 'element', (node: Element) => {

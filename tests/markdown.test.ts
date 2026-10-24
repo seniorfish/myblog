@@ -29,6 +29,38 @@ describe('renderMarkdown', () => {
     expect(result.html).toContain('shiki');
   });
 
+  it('renders inline math as MathJax SVG', async () => {
+    const formula = String.raw`$T_{\text{old}}$`;
+    const result = await renderMarkdown(`Inline ${formula} math.`);
+
+    expect(result.html).toContain('<mjx-container');
+    expect(result.html).toContain('<svg');
+    expect(result.html).not.toContain(formula);
+    expect(result.html).not.toContain(String.raw`\text{old}`);
+    expect(result.plainText).not.toContain('mjx-container');
+  });
+
+  it('renders display math as a block MathJax SVG', async () => {
+    const result = await renderMarkdown(String.raw`$$
+S = \frac{T_{\text{old}}}{T_{\text{new}}}
+$$`);
+
+    expect(result.html).toContain('<mjx-container');
+    expect(result.html).toMatch(/<mjx-container[^>]*display="true"/);
+    expect(result.html).toContain('<svg');
+    expect(result.html).not.toContain(String.raw`\frac`);
+  });
+
+  it('keeps dollar signs inside fenced code blocks literal', async () => {
+    const fence = '```';
+    const literal = String.raw`const value = "$T_{\text{old}}$";`;
+    const result = await renderMarkdown([`${fence}text`, literal, fence].join('\n'));
+
+    expect(result.html).not.toContain('<mjx-container');
+    expect(result.html).toContain('$T_');
+    expect(result.html).toContain(String.raw`\text{old}`);
+  });
+
   it('computes excerpt, plain text, and reading time', async () => {
     const result = await renderMarkdown('第一段。\n\n第二段。');
 
