@@ -61,6 +61,28 @@ $$`);
     expect(result.html).toContain(String.raw`\text{old}`);
   });
 
+
+  it('adds lazy loading and CDN image dimensions for layout stability', async () => {
+    const hash = 'a'.repeat(64);
+    const result = await renderMarkdown(
+      `![photo](https://cdn.chenbase.cc/img/${hash}-1200x800.webp)`,
+    );
+
+    expect(result.html).toContain('loading="lazy"');
+    expect(result.html).toContain('decoding="async"');
+    expect(result.html).toContain('width="1200"');
+    expect(result.html).toContain('height="800"');
+  });
+
+  it('adds lazy loading without dimensions for non-CDN images', async () => {
+    const result = await renderMarkdown('![photo](https://example.com/photo.webp)');
+
+    expect(result.html).toContain('loading="lazy"');
+    expect(result.html).toContain('decoding="async"');
+    expect(result.html).not.toContain('width=');
+    expect(result.html).not.toContain('height=');
+  });
+
   it('computes excerpt, plain text, and reading time', async () => {
     const result = await renderMarkdown('第一段。\n\n第二段。');
 

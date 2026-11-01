@@ -8,7 +8,7 @@
 2. **万物皆节点**：文章、想法、闪念、收藏都是 `.md`；主 Tag 决定形态，次 Tag 决定筛选与皮肤。
 3. **时间不可手写**：日期由 Git 提交与链上锚定推导。
 4. **追加优先**：新进展用 `extends` 新建节点；编辑只用于勘误。
-5. **纯文本仓库**：Git 中不存图片等二进制；媒体以后走对象存储，目前用外链。
+5. **纯文本仓库**：Git 中不存图片等二进制；媒体走 Cloudflare R2 + `cdn.chenbase.cc`（独立仓库 `seniorfish/cdn`），内容寻址，图片文件名带尺寸。
 6. **本地优先**：默认主题静态直出保 SEO；Service Worker + VFS 负责站内零延迟与主题切换。
 
 ## 2. 数据流
@@ -183,7 +183,7 @@ SiteData ──► build/generated/
 - 面向短期个人博客，锚定覆盖使用 O(n) 线性扫描。
 - 主题源码是可信代码，但仍保持 build/deploy 分离，构建 job 不挂敏感 secret。
 - 三步核验依赖公开的 GitHub 仓库；链上交易本身始终可查。
-- 图床尚未实现，图片暂用外链，不要提交二进制。
+- 媒体由独立仓库 `seniorfish/cdn` 管理：图片为 `https://cdn.chenbase.cc/img/<sha256>-<W>x<H>.<ext>`，其他文件为 `files/<sha256>.<ext>`；不要把二进制提交进本仓库。
 - 更新检查是惰性的，SW 休眠时不保证按时轮询；只保留 active / previous / pending 三个 release，更老的标签页可能加载不到旧哈希资源。
 - `npm run test:e2e` 依赖本机 Chrome，CI 只跑单元测试与 `build:all` 校验。
 

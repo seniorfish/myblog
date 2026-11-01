@@ -154,9 +154,25 @@ npm run dev
 
 修改 `content/` 后，`dev.ts` 会自动重新编译并同步给主题 worktree。
 
-## 图片
+## 图片与文件
 
-仓库不存二进制；图床尚未实现。当前请使用外链图片，不要把图片提交到 `content/` 或 `public/`。
+仓库不存二进制；媒体统一走 `https://cdn.chenbase.cc`（源码在独立仓库 `seniorfish/cdn`）。
+
+上传入口：<https://cdn.chenbase.cc/admin/>（Cloudflare Access 登录）。
+
+- 图片：`https://cdn.chenbase.cc/img/<sha256>-<W>x<H>.<ext>`，例如 `img/3f2a…e1-1200x800.webp`。
+- 其他文件：`https://cdn.chenbase.cc/files/<sha256>.<ext>`。
+- 图片上传时在浏览器本地去除 EXIF/GPS/XMP/C2PA，保留原格式；HEIC/AVIF 也在容器级清零，不重编码。
+- 文件名带显示尺寸；博客渲染时会自动写入 `width`/`height`，并补 `loading="lazy"`/`decoding="async"`，避免图片加载导致页面抖动。
+- 公开 URL 拿到即可访问，不要上传敏感文件；其他文件不会自动清理文档元数据。
+
+Markdown 直接使用普通图片语法：
+
+```markdown
+![说明](https://cdn.chenbase.cc/img/<sha256>-1200x800.webp)
+```
+
+不要把图片或文件提交到 `content/`、`public/` 或本仓库其它目录。
 
 ## 时间显示
 

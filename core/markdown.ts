@@ -91,6 +91,37 @@ export interface RenderedMarkdown {
   readingTime: number;
 }
 
+
+/**
+ * Add lazy-loading attributes to images and recover intrinsic dimensions from
+ * the content-addressed CDN filename (`img/<sha256>-<width>x<height>.<ext>`).
+ * The dimensions let the browser reserve layout space before the image loads.
+ */
+function rehypeImageAttributes() {
+  return (tree: HastRoot): void => {
+    visit(tree, 'element', (node: Element) => {
+      if (node.tagName !== 'img') return;
+
+      node.properties = node.properties ?? {};
+      if (node.properties.loading === undefined) node.properties.loading = 'lazy';
+      if (node.properties.decoding === undefined) node.properties.decoding = 'async';
+
+      const src = node.properties.src;
+      if (typeof src !== 'string') return;
+      if (node.properties.width !== undefined || node.properties.height !== undefined) return;
+
+      const match = /\/img\/[0-9a-f]{64}-(\d{1,5})x(\d{1,5})\.[a-z0-9]{1,10}$/iu.exec(src);
+      if (!match) return;
+
+      const width = Number(match[1]);
+      const height = Number(match[2]);
+      if (width <= 0 || height <= 0) return;
+      node.properties.width = width;
+      node.properties.height = height;
+    });
+  };
+}
+
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
@@ -98,6 +129,7 @@ const processor = unified()
   .use(remarkMath)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
+  .use(rehypeImageAttributes)
   .use(rehypeMathjaxSvg)
   .use(normalizeCodeLanguages)
   .use(rehypeSlug)
