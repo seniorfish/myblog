@@ -403,7 +403,7 @@ async function runInteractive(root: string): Promise<number> {
       const action = await p.select({
         message: '没有待处理内容。要做什么？',
         options: [
-          { value: 'new', label: '创建新文章', hint: '复制模板并打开编辑器' },
+          { value: 'new', label: '创建新文章', hint: '复制模板，重命名后打印文件路径' },
           {
             value: 'pull',
             label: '拉取远端更新',
@@ -453,18 +453,31 @@ async function runInteractive(root: string): Promise<number> {
         }
       }
 
+      const name = await p.text({
+        message: '文件名（id：ASCII、小写、连字符；回车使用 new-blog）',
+        placeholder: 'new-blog',
+        initialValue: 'new-blog',
+        validate: (value) => {
+          const slug = slugify(String(value ?? ''));
+          if (!slug) return '至少需要一个 ASCII 字母或数字。';
+          if (existsSync(path.join(root, `content/${slug}.md`))) {
+            return `content/${slug}.md 已存在。`;
+          }
+          return undefined;
+        },
+      });
+      if (p.isCancel(name)) {
+        p.outro('未创建。');
+        return 1;
+      }
+
+      const target = `content/${slugify(String(name))}.md`;
       try {
-        const created = await createTemplateFile(root);
-        const bodyPath = created[0]!;
-        p.log.success(`已复制模板到 ${created[0]} 与 ${created[1]}`);
-        const opened = await openInEditor(path.join(root, bodyPath));
-        if (!opened) {
-          p.log.info(`请手动打开编辑器：${bodyPath}`);
-          p.outro('编辑完成后重新运行 npm run blog。');
-          return 0;
-        }
-        p.log.info('编辑完成后继续检测…');
-        continue;
+        const [bodyPath, metaPath] = await createTemplateFile(root, target);
+        console.log(`新建文章：${path.join(root, bodyPath!)}`);
+        console.log(`元数据：  ${path.join(root, metaPath!)}`);
+        p.outro('写完正文后重新运行 npm run blog 继续提交。');
+        return 0;
       } catch (error) {
         p.log.error(error instanceof Error ? error.message : String(error));
         p.outro('创建模板失败。');
