@@ -18,7 +18,7 @@
 
 现代神经科学研究表明，意识在大脑的不同层面中，扮演的不过是一个[“事后解释者”](https://en.wikipedia.org/wiki/Left-brain_interpreter)的角色。[裂脑人实验](https://en.wikipedia.org/wiki/Split-brain)中，语言功能由左脑控制；当研究人员绕过左脑，单独向其右脑发出指令让左手招手时，受试者只会自然地解释道“似乎看到有人走来，于是才招手”，而无半分怀疑。日常行为中的许多小动作，譬如一次不经意的挠痒，大多也是[无意识的产物](https://en.wikipedia.org/wiki/Neuroscience_of_free_will#Libet_experiment)；只是在动作完成之后，大脑才顺手寻个原由知会前台的意识，哄骗它认为这是一个自然而自发的行为。人们在做关键决策时，往往也是先在无意识中“体会”结果，借由[极其轻微的躯体反应](https://en.wikipedia.org/wiki/Somatic_marker_hypothesis)权衡优劣、拍板定案，事后再[补全推理链条](https://doi.org/10.7551/mitpress/3650.001.0001)。可在意识看来，这一决策本身仿佛真的历经了从审慎推理到最终决断的完整流程。
 
-这是 Ring 0（内核态）对 Ring 3（用户态）的欺骗，而我却仰仗着这种欺骗而活。当现在不再是现在的现在，自我不再是自我的自我，自由不再是自由的自由，理性不再是理性的理性，我便不敢细想，自己的所作所为、乃至所思所想，究竟还残存着多少真实？当微调两个神经元便能让理智的 Qwen3.5-4B [失去良知](https://www.hedwigai.com/blog/qwen-personality-neurons)，我该居于何种神祇之位才能免于突然陷入抑郁、偏执、暴戾或是癫狂而不怀疑、不自知的不幸可能？超人吗？**Übermensch 死了**，而问题还在增多。
+这是 Ring 0 对 Ring 3 的欺骗，而我却仰仗着这种欺骗而活。当现在不再是现在的现在，自我不再是自我的自我，自由不再是自由的自由，理性不再是理性的理性，我便不敢细想，自己的所作所为、乃至所思所想，究竟还残存着多少真实？当微调两个神经元便能让理智的 Qwen3.5-4B [失去良知](https://www.hedwigai.com/blog/qwen-personality-neurons)，我该居于何种神祇之位才能免于突然陷入抑郁、偏执、暴戾或是癫狂而不怀疑、不自知的不幸可能？超人吗？**Übermensch 死了**，而问题还在增多。
 
 如果有一个怪物，[能悉知世间所有粒子的状态](https://en.wikipedia.org/wiki/Laplace%27s_demon)，它能不能精确推演我的一切？如果有一座图书馆，[穷尽了一百万字书籍的全排列](https://en.wikipedia.org/wiki/The_Library_of_Babel)，其中会不会有一本书早已精确描绘了我的一生？如果有一艘船，[航行时每天更换一个零件](https://en.wikipedia.org/wiki/Ship_of_Theseus)，抵达终点时所有零件都已换过一遍，它究竟还是不是起航时的那艘船？
 
