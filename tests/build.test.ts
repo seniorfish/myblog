@@ -200,6 +200,25 @@ describe('compileSite', () => {
     expect(search.docs.some((doc) => doc.id === 'hello')).toBe(true);
   });
 
+  it('treats a body file without a sidecar as a flash note', async () => {
+    await writeFile(path.join(repo, 'content', 'flash.md'), '今天风很大。');
+    await commitAll('flash', '2024-01-02T00:00:00Z');
+
+    const outDir = path.join(repo, 'out');
+    const result = await compileSite({ root: repo, outDir, config: testConfig(false) });
+
+    expect(result.ok).toBe(true);
+    expect(result.issues).toEqual([]);
+
+    const flash = result.siteData?.nodes.find((node) => node.id === 'flash');
+    expect(flash?.primaryTag).toBe('闪念');
+    expect(flash?.rawTags).toBe('闪念');
+    expect(flash?.title).toBeUndefined();
+    expect(flash?.displayTitle).toBe('今天风很大。');
+    expect(flash?.isDirty).toBe(false);
+    expect(flash?.isUntracked).toBe(false);
+  });
+
   it('rejects multiple homepage nodes', async () => {
     await writeNode('home-a', 'tags: 首页\n', 'A\n');
     await writeNode('home-b', 'tags: 首页\n', 'B\n');

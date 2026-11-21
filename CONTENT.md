@@ -35,7 +35,7 @@ npm run ai -- language content/foo.md --mode proofread --output advice --json
 正文与元数据分开存放：
 
 - `content/foo.md`：**只放正文**，不允许 `---` frontmatter。
-- `content/foo.meta.yml`：元数据，至少要有 `tags`。
+- `content/foo.meta.yml`：元数据，至少要有 `tags`；整个文件可以省略，省略时正文自动成为“闪念”。
 
 ```yaml
 # content/foo.meta.yml
@@ -50,7 +50,7 @@ draft: false
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `tags` | 是 | 空格分隔。第一个是主 Tag，后续是次 Tag |
+| `tags` | 有 sidecar 时是 | 空格分隔。第一个是主 Tag，后续是次 Tag；没有 sidecar 时固定为 `闪念` |
 | `title` | 否 | 想法/闪念可以省略 |
 | `description` | 否 | 列表与 RSS 摘要；缺省取正文首段 |
 | `extends` | 否 | 父节点 id（相对路径去 `.md`） |
@@ -61,6 +61,17 @@ draft: false
 修改标签、标题、摘要都只改 `.meta.yml`。正文文件的字节不变，因此不会产生新的正文修订，也不会影响已有的正文存证。
 
 **不要写日期。** `date`、`pubDate`、`createdAt`、`updatedAt` 等字段会让编译直接失败；时间由 Git 提交与链上锚定推导。
+
+### 闪念：没有 sidecar 的正文
+
+`.md` 找不到同名 `.meta.yml` 时，构建会把它当作主 Tag 为 `闪念` 的节点（内置视图，首页整条内联），不会报错：
+
+```markdown
+<!-- content/2026-11-21.md：不需要 2026-11-21.meta.yml -->
+今天风很大。
+```
+
+此时没有 `title`、`description`、`extends`、`draft`、`aliases`：标题取正文首行，也不参与 `extends` 链。想加标题、次 Tag 或挂到父节点时，补一个 `.meta.yml` 即可；反过来删掉 sidecar，节点就退回闪念。已经发布的文章如果误删 sidecar，会静默变成闪念，所以删除元数据前先确认。
 
 AI 补全规则：
 
@@ -104,7 +115,7 @@ title: 构建面向 AI Agent 的个人博客
 tags: 想法 硬件 树莓派
 extends: parent-id
 
-# 闪念：单行；首页整条内联（content/flash.meta.yml）
+# 闪念：单行；首页整条内联。这是唯一可以不写 sidecar 的类型
 tags: 闪念 日常
 extends: parent-id
 

@@ -35,16 +35,31 @@ describe('discoverContent', () => {
     expect(result.entries[0]?.metaRelPath).toBe('content/hello.meta.yml');
   });
 
-  it('reports a missing sidecar', async () => {
+  it('treats a missing sidecar as a flash note', async () => {
     const root = await tempRoot();
     await writeFile(path.join(root, 'content', 'hello.md'), '正文\n');
 
     const result = await discoverContent(root);
 
-    expect(result.entries).toEqual([]);
-    expect(
-      result.issues.some((issue) => issue.message.includes('Missing metadata file')),
-    ).toBe(true);
+    expect(result.issues).toEqual([]);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]?.id).toBe('hello');
+    expect(result.entries[0]?.metaExists).toBe(false);
+    expect(result.entries[0]?.metaRaw.length).toBe(0);
+    expect(result.entries[0]?.frontmatter.tags).toBe('闪念');
+    expect(result.entries[0]?.tags.primaryTag).toBe('闪念');
+  });
+
+  it('marks a paired sidecar as existing', async () => {
+    const root = await tempRoot();
+    await writeFile(path.join(root, 'content', 'hello.md'), '正文\n');
+    await writeFile(path.join(root, 'content', 'hello.meta.yml'), 'tags: 闪念 日常\n');
+
+    const result = await discoverContent(root);
+
+    expect(result.entries[0]?.metaExists).toBe(true);
+    expect(result.entries[0]?.tags.primaryTag).toBe('闪念');
+    expect(result.entries[0]?.tags.secondaryTags).toEqual(['日常']);
   });
 
   it('reports an orphan sidecar', async () => {

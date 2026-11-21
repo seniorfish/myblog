@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { constants } from 'node:fs';
 import { copyFile, rename } from 'node:fs/promises';
 import path from 'node:path';
+import { FLASH_TAG } from '../../core/content.ts';
 import { metaRelPathFor, nodeIdFromPath, parseMetadataSource } from '../../core/metadata.ts';
 import {
   buildCommitMessage,
@@ -107,12 +108,15 @@ export function planCommit(state: BlogState, candidate: Candidate): CommitPlan {
     }
   }
 
+  // Sidecar-less notes carry no tags; report them as flash notes in the message.
+  const tagData = data.tags === undefined ? { ...data, tags: FLASH_TAG } : data;
+
   return {
     kind,
     parentTitle,
     message: buildCommitMessage(
       kind,
-      data,
+      tagData,
       candidate.body ?? '',
       candidate.id,
       parentTitle,
@@ -146,10 +150,12 @@ export async function commitCandidate(
   const metaPath = metaRelPathFor(relPath);
   const plan = planCommit(state, { ...candidate, path: relPath });
   const message = messageOverride?.trim() || plan.message;
-  const commit = commitPaths(state.root, [relPath, metaPath], message);
+  // A flash note has no sidecar, and git rejects nonexistent pathspecs.
+  const paths = existsSync(path.join(state.root, metaPath)) ? [relPath, metaPath] : [relPath];
+  const commit = commitPaths(state.root, paths, message);
 
   const id = nodeIdFromPath(relPath);
-  const primaryTag = primaryTagOf(candidate.data ?? {});
+  const primaryTag = primaryTagOf(candidate.data ?? {}) ?? FLASH_TAG;
   const url =
     primaryTag === state.config.homeTag
       ? '/'

@@ -20,6 +20,7 @@ function makeEntry(id: string, options: EntryOptions = {}): ParsedContent {
     metaRelPath: `content/${id}.meta.yml`,
     metaAbsPath: '',
     metaRaw: Buffer.from(''),
+    metaExists: true,
     frontmatter: {
       tags: primaryTag,
       ...(options.extends ? { extends: options.extends } : {}),

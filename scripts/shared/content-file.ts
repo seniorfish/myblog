@@ -141,7 +141,7 @@ export async function readRawContentFile(
     metaRaw = await readFile(metaAbsPath, 'utf8');
     metaExists = true;
   } catch {
-    // A missing sidecar is reported by content validation; AI may create one.
+    // A missing sidecar makes the file a flash note; the AI may still create one.
   }
 
   let data: Record<string, unknown> = {};

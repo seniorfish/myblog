@@ -101,6 +101,44 @@ describe('commitCandidate', () => {
       git(['show', '--name-only', '--format=', 'HEAD']).split('\n').sort(),
     ).toEqual(['content/a.md', 'content/a.meta.yml']);
   });
+  it('commits a flash note that has no sidecar', async () => {
+    await writeFile(path.join(repo, 'content', 'flash.md'), '今天风很大。');
+    const raw = await readRawContentFile(repo, 'content/flash.md');
+    const candidate: Candidate = {
+      path: 'content/flash.md',
+      metaPath: 'content/flash.meta.yml',
+      id: 'flash',
+      kind: 'untracked',
+      exists: true,
+      staged: false,
+      isTemplate: false,
+      data: raw.data,
+      body: raw.body,
+      errors: [],
+      warnings: [],
+    };
+
+    const state = {
+      root: repo,
+      config,
+      git: readGitContext(repo),
+      validation: { entries: [] },
+      candidates: [candidate],
+      globalErrors: [],
+      blockers: [],
+      notes: [],
+      fixes: [],
+      canCommit: true,
+    } as unknown as BlogState;
+
+    const result = await commitCandidate(state, candidate);
+    expect(result.message).toBe('content(闪念): add 今天风很大。');
+    expect(git(['log', '-1', '--format=%s'])).toBe('content(闪念): add 今天风很大。');
+    expect(git(['show', '--name-only', '--format=', 'HEAD']).split('\n')).toEqual([
+      'content/flash.md',
+    ]);
+    expect(existsSync(path.join(repo, 'content', 'flash.meta.yml'))).toBe(false);
+  });
 });
 
 describe('renameTemplate', () => {

@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **内容编译**：Markdown 正文 + `.meta.yml` 元数据；主 Tag 决定形态，`extends` 表达后续进展。
+- **内容编译**：Markdown 正文 + 可选 `.meta.yml` 元数据（没有 sidecar 即视为闪念）；主 Tag 决定形态，`extends` 表达后续进展。
 - **可验证的时间**：时间来自 Git 提交；内容 commit 锚定到 Base 主网事件合约，页面提供三步核验。
 - **多主题与离线**：主题是独立的孤儿分支；构建产出 VFS，Service Worker 负责站内零延迟、主题切换与离线访问。
 - **写作工具**：`npm run blog` 管仓库与 Git，`npm run ai` 管单文件元数据 / id / 语言建议。

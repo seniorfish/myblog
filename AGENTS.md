@@ -6,7 +6,7 @@
 
 1. **契约优先**：`core/contract.ts` 是唯一数据契约，主题只依赖其中的 `SiteData`。修改它之前，确认所有主题仍能构建。
 2. **尊重分层**：`main` 负责内容、编译器、契约、运行时与脚本；`theme/<id>` 只负责 UI。不要手改 `src/generated/`、`build/`、`dist/`、`.worktrees/`，也不要把 harness 生成物提交到主题分支。
-3. **内容是写出来的，不是标出来的**：正文与 `.meta.yml` 分离，日期不可手写，id 发布后不改名。规则见 [CONTENT.md](CONTENT.md)。
+3. **内容是写出来的，不是标出来的**：正文与 `.meta.yml` 分离（没有 sidecar 的正文即闪念），日期不可手写，id 发布后不改名。规则见 [CONTENT.md](CONTENT.md)。
 4. **历史与存证只追加**：`main` 保持线性；不要改写已发布历史或伪造时间。锚定以 commit 为粒度，机制见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [contracts/README.md](contracts/README.md)。
 5. **密钥不跨越信任边界**：私钥、助记词、keystore 密码不得进入仓库、`.env`、对话或任何 Claude 可读取的文件。只有指定的 CI job 读取自己的 secret，build job 不接触敏感信息。
 6. **不要另造运行时**：dock / Service Worker 由构建期注入，VFS、缓存与路径不变量见 [ARCHITECTURE.md](ARCHITECTURE.md)；主题和脚本应复用，不要重写一套。

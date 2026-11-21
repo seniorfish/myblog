@@ -387,7 +387,9 @@ export async function compileSite(options: CompileOptions): Promise<CompileResul
     const rendered = await renderMarkdown(entry.body);
     searchTexts.set(entry.id, rendered.plainText);
     const bodyStatus = getWorkingStatus(root, entry.relPath);
-    const metaStatus = getWorkingStatus(root, entry.metaRelPath);
+    const metaStatus = entry.metaExists
+      ? getWorkingStatus(root, entry.metaRelPath)
+      : { dirty: false, untracked: false };
     const history = getFileHistory(root, entry.relPath);
     const revisions = makeRevision(entry, root, history, warnings);
     const times = resolveAnchorTimes(revisions, coverage, entry.mtimeMs);

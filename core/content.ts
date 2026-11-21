@@ -28,8 +28,10 @@ export interface ParsedContent {
   /** Repository-relative path, e.g. content/hello.meta.yml. */
   metaRelPath: string;
   metaAbsPath: string;
-  /** Raw bytes of the metadata sidecar. */
+  /** Raw bytes of the metadata sidecar; empty when the file has none. */
   metaRaw: Buffer;
+  /** False for flash notes, which have no sidecar at all. */
+  metaExists: boolean;
   frontmatter: Frontmatter;
   tags: NormalizedTags;
   mtimeMs: number;
@@ -40,6 +42,9 @@ export interface DiscoverResult {
   entries: ParsedContent[];
   issues: CompileIssue[];
 }
+
+/** Primary tag for body files that have no metadata sidecar. */
+export const FLASH_TAG = '闪念';
 
 /** Ignore editor/tooling directories such as `.ipynb_checkpoints`. */
 export function isIgnoredContentPath(relative: string): boolean {
@@ -109,30 +114,35 @@ export async function discoverContent(root: string): Promise<DiscoverResult> {
       continue;
     }
 
-    if (!metaSet.has(metaRelPath)) {
-      issues.push({
-        level: 'error',
-        file: relPath,
-        message: `Missing metadata file ${metaRelPath}. Every article needs a sidecar with at least "tags".`,
-      });
-      continue;
+    const metaExists = metaSet.has(metaRelPath);
+    let metaRaw: Buffer = Buffer.alloc(0);
+    let metaMtimeMs = 0;
+
+    if (metaExists) {
+      let fileMetaRaw: Buffer;
+      let metaStat: Awaited<ReturnType<typeof stat>>;
+      try {
+        [fileMetaRaw, metaStat] = await Promise.all([
+          readFile(metaAbsPath),
+          stat(metaAbsPath),
+        ]);
+      } catch (error) {
+        issues.push({
+          level: 'error',
+          file: metaRelPath,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+      metaRaw = fileMetaRaw;
+      metaMtimeMs = metaStat.mtimeMs;
     }
 
-    let metaRaw: Buffer;
-    let metaStat: Awaited<ReturnType<typeof stat>>;
     try {
-      [metaRaw, metaStat] = await Promise.all([readFile(metaAbsPath), stat(metaAbsPath)]);
-    } catch (error) {
-      issues.push({
-        level: 'error',
-        file: metaRelPath,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
-
-    try {
-      const frontmatter = parseMetadataSource(metaRaw.toString('utf8'));
+      // A sidecar-less body file is a flash note (闪念); it needs no metadata.
+      const frontmatter = metaExists
+        ? parseMetadataSource(metaRaw.toString('utf8'))
+        : ({ tags: FLASH_TAG } satisfies Frontmatter);
       const tags = normalizeTags(frontmatter.tags);
 
       entries.push({
@@ -144,10 +154,11 @@ export async function discoverContent(root: string): Promise<DiscoverResult> {
         metaRelPath,
         metaAbsPath,
         metaRaw,
+        metaExists,
         frontmatter,
         tags,
         mtimeMs: fileStat.mtimeMs,
-        metaMtimeMs: metaStat.mtimeMs,
+        metaMtimeMs,
       });
     } catch (error) {
       if (error instanceof FrontmatterError) {

@@ -42,7 +42,7 @@ SiteData ──► build/generated/
 | `core/contract.ts` | 唯一数据契约；主题只能依赖它 |
 | `core/schema.ts` | 元数据、anchor record、theme.contract 的 Zod 校验 |
 | `core/metadata.ts` | `.meta.yml` 路径、YAML 解析/序列化、字段顺序 |
-| `core/content.ts` / `core/tree.ts` | 成对发现正文与元数据；解析 `extends` 图，防断链/环/别名 |
+| `core/content.ts` / `core/tree.ts` | 发现正文并配对元数据（缺 sidecar 视为闪念）；解析 `extends` 图，防断链/环/别名 |
 | `core/markdown.ts` | Markdown → HTML；GFM、GitHub alerts、MathJax、Shiki 双主题 |
 | `core/git.ts` | `git log --follow`、blob、diff、anchors 分支、工作区状态 |
 | `core/anchor-index.ts` / `core/anchors.ts` | `anchors.ndjson` 解析、commit 补零、锚定覆盖与时间推导 |
@@ -52,7 +52,7 @@ SiteData ──► build/generated/
 
 ## 3. 内容模型
 
-每篇内容是一对文件：`content/{id}.md` 只放正文，`content/{id}.meta.yml` 放元数据。字段、主 Tag、`extends`、草稿与首页写法以 [CONTENT.md](CONTENT.md) 为准。
+每篇内容由 `content/{id}.md` 正文与可选的 `content/{id}.meta.yml` 元数据组成。没有 sidecar 的正文视为主 Tag `闪念` 的闪念节点，不写任何文件。字段、主 Tag、`extends`、草稿与首页写法以 [CONTENT.md](CONTENT.md) 为准。
 
 编译期只关心这些约束：
 
